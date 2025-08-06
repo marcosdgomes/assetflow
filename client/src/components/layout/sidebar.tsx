@@ -54,7 +54,7 @@ export default function Sidebar() {
           </div>
           <div>
             <h1 className="text-xl font-semibold text-slate-900">AssetFlow</h1>
-            <p className="text-xs text-slate-500">{tenant?.name || "Loading..."}</p>
+            <p className="text-xs text-slate-500">{(tenant as any)?.name || "Loading..."}</p>
           </div>
         </div>
       </div>
@@ -62,18 +62,14 @@ export default function Sidebar() {
       {/* Navigation Menu */}
       <div className="flex-1 px-4 py-6 space-y-2">
         {navigationItems.map((item) => (
-          <Link key={item.path} href={item.path}>
-            <a
-              className={cn(
-                "flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors",
-                location === item.path
-                  ? "bg-primary-50 text-primary-700"
-                  : "text-slate-600 hover:bg-slate-100"
-              )}
-            >
-              <i className={`${item.icon} w-5`}></i>
-              <span className={location === item.path ? "font-medium" : ""}>{item.name}</span>
-            </a>
+          <Link key={item.path} href={item.path} className={cn(
+            "flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors",
+            location === item.path
+              ? "bg-primary-50 text-primary-700"
+              : "text-slate-600 hover:bg-slate-100"
+          )}>
+            <i className={`${item.icon} w-5`}></i>
+            <span className={location === item.path ? "font-medium" : ""}>{item.name}</span>
           </Link>
         ))}
       </div>
@@ -82,15 +78,15 @@ export default function Sidebar() {
       <div className="p-4 border-t border-slate-200">
         <div className="flex items-center space-x-3">
           <img 
-            src={user?.profileImageUrl || `https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=40&h=40&fit=crop&crop=face`}
+            src={(user as any)?.profileImageUrl || `https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=40&h=40&fit=crop&crop=face`}
             alt="User avatar" 
             className="w-8 h-8 rounded-full object-cover"
           />
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-slate-900 truncate">
-              {user?.firstName && user?.lastName 
-                ? `${user.firstName} ${user.lastName}`
-                : user?.email || "User"
+              {(user as any)?.firstName && (user as any)?.lastName 
+                ? `${(user as any).firstName} ${(user as any).lastName}`
+                : (user as any)?.email || "User"
               }
             </p>
             <p className="text-xs text-slate-500">Admin</p>

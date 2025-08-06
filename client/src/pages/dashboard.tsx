@@ -1,6 +1,8 @@
 import { useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 import Sidebar from "@/components/layout/sidebar";
 import Header from "@/components/layout/header";
 import KPICards from "@/components/dashboard/kpi-cards";
@@ -10,7 +12,7 @@ import DependencyPreview from "@/components/dashboard/dependency-preview";
 import ActivityFeed from "@/components/dashboard/activity-feed";
 
 export default function Dashboard() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { user, isAuthenticated, isLoading } = useAuth();
   const { toast } = useToast();
 
   useEffect(() => {
