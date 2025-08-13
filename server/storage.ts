@@ -150,6 +150,24 @@ export class DatabaseStorage implements IStorage {
     return newDepartment;
   }
 
+  async getDepartmentById(id: string): Promise<Department | undefined> {
+    const [department] = await db.select().from(departments).where(eq(departments.id, id));
+    return department;
+  }
+
+  async updateDepartment(id: string, updates: Partial<InsertDepartment>): Promise<Department> {
+    const [updatedDepartment] = await db
+      .update(departments)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(departments.id, id))
+      .returning();
+    return updatedDepartment;
+  }
+
+  async deleteDepartment(id: string): Promise<void> {
+    await db.delete(departments).where(eq(departments.id, id));
+  }
+
   // Environment operations
   async getEnvironmentsByTenantId(tenantId: string): Promise<Environment[]> {
     return db.select().from(environments).where(eq(environments.tenantId, tenantId));
@@ -337,7 +355,7 @@ export class DatabaseStorage implements IStorage {
     isolatedAssets: number;
   }> {
     // Get counts in parallel
-    const [softwareAssets, envs, costs, deps] = await Promise.all([
+    const [softwareAssetsResult, envs, costs, deps] = await Promise.all([
       db.select().from(softwareAssets).where(eq(softwareAssets.tenantId, tenantId)),
       db.select().from(environments).where(eq(environments.tenantId, tenantId)),
       this.getSoftwareCostsByTenantId(tenantId),
@@ -355,13 +373,13 @@ export class DatabaseStorage implements IStorage {
     const criticalDependencies = deps.filter(dep => dep.dependencyType === 'required').length;
 
     return {
-      totalSoftware: softwareAssets.length,
+      totalSoftware: softwareAssetsResult.length,
       activeEnvironments,
       monthlyCost,
       criticalDependencies,
       totalConnections: deps.length,
       criticalPaths: criticalDependencies,
-      isolatedAssets: softwareAssets.filter(asset => 
+      isolatedAssets: softwareAssetsResult.filter(asset => 
         !deps.some(dep => 
           dep.parentSoftwareId === asset.id || dep.dependentSoftwareId === asset.id
         )

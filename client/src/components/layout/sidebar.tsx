@@ -10,6 +10,11 @@ const navigationItems = [
     icon: "fas fa-chart-pie",
   },
   {
+    name: "Departments",
+    path: "/departments",
+    icon: "fas fa-building",
+  },
+  {
     name: "Software Assets",
     path: "/software",
     icon: "fas fa-desktop",

@@ -128,6 +128,80 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update department
+  app.put("/api/departments/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const tenant = await storage.getTenantByUserId(userId);
+      const departmentId = req.params.id;
+      
+      if (!tenant) {
+        return res.status(404).json({ message: "No tenant found" });
+      }
+      
+      // Check if department exists and belongs to tenant
+      const existingDepartment = await storage.getDepartmentById(departmentId);
+      if (!existingDepartment || existingDepartment.tenantId !== tenant.id) {
+        return res.status(404).json({ message: "Department not found" });
+      }
+      
+      const validatedData = insertDepartmentSchema.partial().parse(req.body);
+      const updatedDepartment = await storage.updateDepartment(departmentId, validatedData);
+      
+      await storage.createActivity({
+        tenantId: tenant.id,
+        userId,
+        action: "updated",
+        entityType: "department",
+        entityId: departmentId,
+        description: `Updated department: ${updatedDepartment.name}`,
+      });
+      
+      res.json(updatedDepartment);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: fromZodError(error).message });
+      }
+      console.error("Error updating department:", error);
+      res.status(500).json({ message: "Failed to update department" });
+    }
+  });
+
+  // Delete department
+  app.delete("/api/departments/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const tenant = await storage.getTenantByUserId(userId);
+      const departmentId = req.params.id;
+      
+      if (!tenant) {
+        return res.status(404).json({ message: "No tenant found" });
+      }
+      
+      // Check if department exists and belongs to tenant
+      const existingDepartment = await storage.getDepartmentById(departmentId);
+      if (!existingDepartment || existingDepartment.tenantId !== tenant.id) {
+        return res.status(404).json({ message: "Department not found" });
+      }
+      
+      await storage.deleteDepartment(departmentId);
+      
+      await storage.createActivity({
+        tenantId: tenant.id,
+        userId,
+        action: "deleted",
+        entityType: "department",
+        entityId: departmentId,
+        description: `Deleted department: ${existingDepartment.name}`,
+      });
+      
+      res.json({ message: "Department deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting department:", error);
+      res.status(500).json({ message: "Failed to delete department" });
+    }
+  });
+
   // Environment routes
   app.get("/api/environments", isAuthenticated, async (req: any, res) => {
     try {
