@@ -117,7 +117,7 @@ export default function EditSoftwareModal({ open, onOpenChange, software }: Edit
         status: software.status,
         version: software.version || "",
         licenseType: software.licenseType || "",
-        departmentId: software.departmentId || "",
+        departmentId: software.departmentId || "none",
       });
     }
   }, [software, form]);
@@ -125,7 +125,12 @@ export default function EditSoftwareModal({ open, onOpenChange, software }: Edit
   const mutation = useMutation({
     mutationFn: async (data: FormData) => {
       if (!software) throw new Error("No software selected");
-      const response = await apiRequest("PUT", `/api/software/${software.id}`, data);
+      // Clean the data - replace "none" with undefined for departmentId
+      const cleanData = {
+        ...data,
+        departmentId: data.departmentId === "none" ? undefined : data.departmentId,
+      };
+      const response = await apiRequest("PUT", `/api/software/${software.id}`, cleanData);
       return response.json();
     },
     onSuccess: () => {
@@ -334,7 +339,7 @@ export default function EditSoftwareModal({ open, onOpenChange, software }: Edit
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="">No Department</SelectItem>
+                      <SelectItem value="none">No Department</SelectItem>
                       {departments.map((dept) => (
                         <SelectItem key={dept.id} value={dept.id}>
                           {dept.name}

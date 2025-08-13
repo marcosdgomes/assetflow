@@ -145,7 +145,7 @@ export default function SoftwareList() {
     return matchesSearch && matchesStatus && matchesTechnology;
   });
 
-  const uniqueTechnologies = [...new Set(software.map(s => s.technology).filter(Boolean))];
+  const uniqueTechnologies = Array.from(new Set(software.map(s => s.technology).filter(Boolean)));
 
   const handleEditSoftware = (software: SoftwareAsset) => {
     setSelectedSoftware(software);
