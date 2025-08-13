@@ -10,6 +10,9 @@ import {
   softwareDependencies,
   environmentSoftware,
   activities,
+  discoveryAgents,
+  discoverySessions,
+  discoveredSoftware,
   type User,
   type UpsertUser,
   type Tenant,
@@ -28,6 +31,12 @@ import {
   type InsertEnvironmentSoftware,
   type Activity,
   type InsertActivity,
+  type DiscoveryAgent,
+  type InsertDiscoveryAgent,
+  type DiscoverySession,
+  type InsertDiscoverySession,
+  type DiscoveredSoftware,
+  type InsertDiscoveredSoftware,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc } from "drizzle-orm";
@@ -80,6 +89,20 @@ export interface IStorage {
   // Activity operations
   getActivitiesByTenantId(tenantId: string, limit?: number): Promise<(Activity & { user?: User })[]>;
   createActivity(activity: InsertActivity): Promise<Activity>;
+  
+  // Discovery operations
+  getDiscoveryAgents(tenantId: string): Promise<(DiscoveryAgent & { environment?: Environment })[]>;
+  createDiscoveryAgent(agent: InsertDiscoveryAgent): Promise<DiscoveryAgent>;
+  runDiscoveryAgent(tenantId: string, agentId: string): Promise<DiscoverySession>;
+  getDiscoverySessions(tenantId: string): Promise<(DiscoverySession & { agent: DiscoveryAgent })[]>;
+  getDiscoveredSoftware(tenantId: string, status?: string): Promise<(DiscoveredSoftware & { 
+    agent: DiscoveryAgent; 
+    session: DiscoverySession;
+    environment?: Environment;
+    department?: Department;
+  })[]>;
+  approveDiscoveredSoftware(tenantId: string, discoveredId: string, userId: string): Promise<SoftwareAsset>;
+  rejectDiscoveredSoftware(tenantId: string, discoveredId: string, userId: string): Promise<void>;
   
   // Dashboard stats
   getDashboardStats(tenantId: string): Promise<{
@@ -385,6 +408,221 @@ export class DatabaseStorage implements IStorage {
         )
       ).length,
     };
+  }
+
+  // Discovery operations
+  async getDiscoveryAgents(tenantId: string): Promise<(DiscoveryAgent & { environment?: Environment })[]> {
+    const result = await db
+      .select({
+        agent: discoveryAgents,
+        environment: environments
+      })
+      .from(discoveryAgents)
+      .leftJoin(environments, eq(discoveryAgents.environmentId, environments.id))
+      .where(eq(discoveryAgents.tenantId, tenantId))
+      .orderBy(desc(discoveryAgents.createdAt));
+
+    return result.map(row => ({
+      ...row.agent,
+      environment: row.environment || undefined
+    }));
+  }
+
+  async createDiscoveryAgent(agent: InsertDiscoveryAgent): Promise<DiscoveryAgent> {
+    const [newAgent] = await db.insert(discoveryAgents).values(agent).returning();
+    return newAgent;
+  }
+
+  async runDiscoveryAgent(tenantId: string, agentId: string): Promise<DiscoverySession> {
+    // Create a discovery session
+    const [session] = await db.insert(discoverySessions).values({
+      tenantId,
+      agentId,
+      status: 'running'
+    }).returning();
+
+    // Update agent's last run time
+    await db
+      .update(discoveryAgents)
+      .set({ lastRun: new Date() })
+      .where(eq(discoveryAgents.id, agentId));
+
+    // Simulate discovery process - in real implementation this would run actual discovery logic
+    setTimeout(async () => {
+      try {
+        // Mock discovered software for demo
+        const mockDiscoveries = [
+          {
+            tenantId,
+            sessionId: session.id,
+            agentId,
+            name: 'Microsoft Office 365',
+            version: '16.0.14931.20216',
+            vendor: 'Microsoft Corporation',
+            technology: 'productivity',
+            installPath: 'C:\\Program Files\\Microsoft Office',
+            sourceType: 'registry',
+            confidence: 95,
+            fingerprint: 'ms-office-365-' + Date.now()
+          },
+          {
+            tenantId,
+            sessionId: session.id,
+            agentId,
+            name: 'Google Chrome',
+            version: '119.0.6045.199',
+            vendor: 'Google LLC',
+            technology: 'browser',
+            installPath: 'C:\\Program Files\\Google\\Chrome',
+            sourceType: 'filesystem',
+            confidence: 100,
+            fingerprint: 'chrome-' + Date.now()
+          },
+          {
+            tenantId,
+            sessionId: session.id,
+            agentId,
+            name: 'Docker Desktop',
+            version: '4.25.2',
+            vendor: 'Docker Inc.',
+            technology: 'containers',
+            installPath: 'C:\\Program Files\\Docker\\Docker',
+            sourceType: 'process',
+            confidence: 90,
+            fingerprint: 'docker-' + Date.now()
+          }
+        ];
+
+        // Insert discovered software
+        await db.insert(discoveredSoftware).values(mockDiscoveries);
+
+        // Update session as completed
+        await db
+          .update(discoverySessions)
+          .set({
+            status: 'completed',
+            completedAt: new Date(),
+            totalFound: mockDiscoveries.length,
+            newAssets: mockDiscoveries.length
+          })
+          .where(eq(discoverySessions.id, session.id));
+
+      } catch (error) {
+        await db
+          .update(discoverySessions)
+          .set({
+            status: 'failed',
+            completedAt: new Date(),
+            errors: { error: error.message }
+          })
+          .where(eq(discoverySessions.id, session.id));
+      }
+    }, 2000); // 2 second delay to simulate processing
+
+    return session;
+  }
+
+  async getDiscoverySessions(tenantId: string): Promise<(DiscoverySession & { agent: DiscoveryAgent })[]> {
+    const result = await db
+      .select({
+        session: discoverySessions,
+        agent: discoveryAgents
+      })
+      .from(discoverySessions)
+      .innerJoin(discoveryAgents, eq(discoverySessions.agentId, discoveryAgents.id))
+      .where(eq(discoverySessions.tenantId, tenantId))
+      .orderBy(desc(discoverySessions.startedAt));
+
+    return result.map(row => ({
+      ...row.session,
+      agent: row.agent
+    }));
+  }
+
+  async getDiscoveredSoftware(tenantId: string, status = 'discovered'): Promise<(DiscoveredSoftware & { 
+    agent: DiscoveryAgent; 
+    session: DiscoverySession;
+    environment?: Environment;
+    department?: Department;
+  })[]> {
+    const result = await db
+      .select({
+        discovered: discoveredSoftware,
+        agent: discoveryAgents,
+        session: discoverySessions,
+        environment: environments,
+        department: departments
+      })
+      .from(discoveredSoftware)
+      .innerJoin(discoveryAgents, eq(discoveredSoftware.agentId, discoveryAgents.id))
+      .innerJoin(discoverySessions, eq(discoveredSoftware.sessionId, discoverySessions.id))
+      .leftJoin(environments, eq(discoveredSoftware.environmentId, environments.id))
+      .leftJoin(departments, eq(discoveredSoftware.departmentId, departments.id))
+      .where(and(
+        eq(discoveredSoftware.tenantId, tenantId),
+        eq(discoveredSoftware.status, status)
+      ))
+      .orderBy(desc(discoveredSoftware.discoveredAt));
+
+    return result.map(row => ({
+      ...row.discovered,
+      agent: row.agent,
+      session: row.session,
+      environment: row.environment || undefined,
+      department: row.department || undefined
+    }));
+  }
+
+  async approveDiscoveredSoftware(tenantId: string, discoveredId: string, userId: string): Promise<SoftwareAsset> {
+    const [discovered] = await db
+      .select()
+      .from(discoveredSoftware)
+      .where(and(
+        eq(discoveredSoftware.id, discoveredId),
+        eq(discoveredSoftware.tenantId, tenantId)
+      ));
+
+    if (!discovered) {
+      throw new Error('Discovered software not found');
+    }
+
+    // Create software asset from discovered data
+    const [asset] = await db.insert(softwareAssets).values({
+      tenantId,
+      name: discovered.name,
+      version: discovered.version,
+      vendor: discovered.vendor,
+      technology: discovered.technology,
+      departmentId: discovered.departmentId,
+      description: `Auto-discovered via ${discovered.sourceType}`
+    }).returning();
+
+    // Update discovered software status and link to asset
+    await db
+      .update(discoveredSoftware)
+      .set({
+        status: 'approved',
+        assetId: asset.id,
+        reviewedAt: new Date(),
+        reviewedBy: userId
+      })
+      .where(eq(discoveredSoftware.id, discoveredId));
+
+    return asset;
+  }
+
+  async rejectDiscoveredSoftware(tenantId: string, discoveredId: string, userId: string): Promise<void> {
+    await db
+      .update(discoveredSoftware)
+      .set({
+        status: 'rejected',
+        reviewedAt: new Date(),
+        reviewedBy: userId
+      })
+      .where(and(
+        eq(discoveredSoftware.id, discoveredId),
+        eq(discoveredSoftware.tenantId, tenantId)
+      ));
   }
 }
 

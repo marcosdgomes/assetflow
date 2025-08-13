@@ -20,6 +20,11 @@ const navigationItems = [
     icon: "fas fa-desktop",
   },
   {
+    name: "Automated Discovery",
+    path: "/discovery",
+    icon: "fas fa-search",
+  },
+  {
     name: "Environments",
     path: "/environments",
     icon: "fas fa-server",

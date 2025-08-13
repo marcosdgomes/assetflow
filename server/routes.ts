@@ -10,6 +10,10 @@ import {
   insertSoftwareCostSchema,
   insertSoftwareDependencySchema,
   insertEnvironmentSoftwareSchema,
+  insertActivitySchema,
+  insertDiscoveryAgentSchema,
+  insertDiscoverySessionSchema,
+  insertDiscoveredSoftwareSchema,
 } from "@shared/schema";
 import { z } from "zod";
 import { fromZodError } from "zod-validation-error";
@@ -519,6 +523,147 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching activities:", error);
       res.status(500).json({ message: "Failed to fetch activities" });
+    }
+  });
+
+  // Discovery Agent Routes
+  app.get("/api/discovery/agents", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const tenant = await storage.getTenantByUserId(userId);
+      
+      if (!tenant) {
+        return res.status(404).json({ message: "No tenant found" });
+      }
+
+      const agents = await storage.getDiscoveryAgents(tenant.id);
+      res.json(agents);
+    } catch (error) {
+      console.error("Error fetching discovery agents:", error);
+      res.status(500).json({ message: "Failed to fetch discovery agents" });
+    }
+  });
+
+  app.post("/api/discovery/agents", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const tenant = await storage.getTenantByUserId(userId);
+      
+      if (!tenant) {
+        return res.status(404).json({ message: "No tenant found" });
+      }
+
+      const agentData = insertDiscoveryAgentSchema.parse({
+        ...req.body,
+        tenantId: tenant.id,
+      });
+
+      const agent = await storage.createDiscoveryAgent(agentData);
+      
+      await storage.createActivity({
+        tenantId: tenant.id,
+        userId,
+        action: "created",
+        entityType: "discovery_agent",
+        entityId: agent.id,
+        description: `Created discovery agent "${agent.name}"`,
+      });
+
+      res.json(agent);
+    } catch (error) {
+      console.error("Error creating discovery agent:", error);
+      res.status(500).json({ message: "Failed to create discovery agent" });
+    }
+  });
+
+  app.post("/api/discovery/agents/:id/run", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const tenant = await storage.getTenantByUserId(userId);
+      const agentId = req.params.id;
+      
+      if (!tenant) {
+        return res.status(404).json({ message: "No tenant found" });
+      }
+
+      const session = await storage.runDiscoveryAgent(tenant.id, agentId);
+      res.json(session);
+    } catch (error) {
+      console.error("Error running discovery agent:", error);
+      res.status(500).json({ message: "Failed to run discovery agent" });
+    }
+  });
+
+  // Discovery Sessions Routes
+  app.get("/api/discovery/sessions", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const tenant = await storage.getTenantByUserId(userId);
+      
+      if (!tenant) {
+        return res.status(404).json({ message: "No tenant found" });
+      }
+
+      const sessions = await storage.getDiscoverySessions(tenant.id);
+      res.json(sessions);
+    } catch (error) {
+      console.error("Error fetching discovery sessions:", error);
+      res.status(500).json({ message: "Failed to fetch discovery sessions" });
+    }
+  });
+
+  // Discovered Software Routes
+  app.get("/api/discovery/discovered", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const tenant = await storage.getTenantByUserId(userId);
+      
+      if (!tenant) {
+        return res.status(404).json({ message: "No tenant found" });
+      }
+
+      const status = req.query.status as string || 'discovered';
+      const discoveries = await storage.getDiscoveredSoftware(tenant.id, status);
+      res.json(discoveries);
+    } catch (error) {
+      console.error("Error fetching discovered software:", error);
+      res.status(500).json({ message: "Failed to fetch discovered software" });
+    }
+  });
+
+  app.post("/api/discovery/discovered/:id/approve", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const tenant = await storage.getTenantByUserId(userId);
+      const discoveredId = req.params.id;
+      
+      if (!tenant) {
+        return res.status(404).json({ message: "No tenant found" });
+      }
+
+      const result = await storage.approveDiscoveredSoftware(tenant.id, discoveredId, userId);
+      res.json(result);
+    } catch (error) {
+      console.error("Error approving discovered software:", error);
+      res.status(500).json({ message: "Failed to approve discovered software" });
+    }
+  });
+
+  app.post("/api/discovery/discovered/:id/reject", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const tenant = await storage.getTenantByUserId(userId);
+      const discoveredId = req.params.id;
+      
+      if (!tenant) {
+        return res.status(404).json({ message: "No tenant found" });
+      }
+
+      await storage.rejectDiscoveredSoftware(tenant.id, discoveredId, userId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error rejecting discovered software:", error);
+      res.status(500).json({ message: "Failed to reject discovered software" });
     }
   });
 

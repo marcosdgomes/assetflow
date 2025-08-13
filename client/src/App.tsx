@@ -10,6 +10,7 @@ import Setup from "@/pages/setup";
 import Dashboard from "@/pages/dashboard";
 import Departments from "@/pages/departments";
 import Software from "@/pages/software";
+import Discovery from "@/pages/discovery";
 import Environments from "@/pages/environments";
 import Dependencies from "@/pages/dependencies";
 import Costs from "@/pages/costs";
@@ -46,6 +47,7 @@ function Router() {
           <Route path="/" component={Dashboard} />
           <Route path="/departments" component={Departments} />
           <Route path="/software" component={Software} />
+          <Route path="/discovery" component={Discovery} />
           <Route path="/environments" component={Environments} />
           <Route path="/dependencies" component={Dependencies} />
           <Route path="/costs" component={Costs} />

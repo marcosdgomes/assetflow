@@ -154,6 +154,61 @@ export const activities = pgTable("activities", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Discovery agents/scanners
+export const discoveryAgents = pgTable("discovery_agents", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  type: varchar("type").notNull(), // network-scan, api-integration, agent-based, registry-scan
+  environmentId: varchar("environment_id").references(() => environments.id, { onDelete: "cascade" }),
+  status: varchar("status").notNull().default("active"), // active, inactive, error
+  configuration: jsonb("configuration"), // Scanner-specific config
+  lastRun: timestamp("last_run"),
+  nextRun: timestamp("next_run"),
+  schedule: varchar("schedule"), // cron expression
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Discovery scan results/sessions
+export const discoverySessions = pgTable("discovery_sessions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  agentId: varchar("agent_id").notNull().references(() => discoveryAgents.id, { onDelete: "cascade" }),
+  status: varchar("status").notNull().default("running"), // running, completed, failed
+  startedAt: timestamp("started_at").defaultNow(),
+  completedAt: timestamp("completed_at"),
+  totalFound: integer("total_found").default(0),
+  newAssets: integer("new_assets").default(0),
+  updatedAssets: integer("updated_assets").default(0),
+  errors: jsonb("errors"), // Error details
+  metadata: jsonb("metadata"), // Scan details
+});
+
+// Discovered software items (before they become assets)
+export const discoveredSoftware = pgTable("discovered_software", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  sessionId: varchar("session_id").notNull().references(() => discoverySessions.id, { onDelete: "cascade" }),
+  agentId: varchar("agent_id").notNull().references(() => discoveryAgents.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  version: varchar("version"),
+  vendor: text("vendor"),
+  technology: varchar("technology"),
+  installPath: text("install_path"),
+  environmentId: varchar("environment_id").references(() => environments.id),
+  departmentId: varchar("department_id").references(() => departments.id),
+  sourceType: varchar("source_type").notNull(), // registry, filesystem, process, api
+  sourceData: jsonb("source_data"), // Raw discovery data
+  fingerprint: varchar("fingerprint"), // Unique identifier for deduplication
+  status: varchar("status").notNull().default("discovered"), // discovered, approved, rejected, merged
+  assetId: varchar("asset_id").references(() => softwareAssets.id), // Link to created asset
+  confidence: integer("confidence").default(100), // Confidence level 0-100
+  discoveredAt: timestamp("discovered_at").defaultNow(),
+  reviewedAt: timestamp("reviewed_at"),
+  reviewedBy: varchar("reviewed_by").references(() => users.id),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   userTenants: many(userTenants),
@@ -268,6 +323,62 @@ export const activitiesRelations = relations(activities, ({ one }) => ({
   }),
 }));
 
+export const discoveryAgentsRelations = relations(discoveryAgents, ({ one, many }) => ({
+  tenant: one(tenants, {
+    fields: [discoveryAgents.tenantId],
+    references: [tenants.id],
+  }),
+  environment: one(environments, {
+    fields: [discoveryAgents.environmentId],
+    references: [environments.id],
+  }),
+  sessions: many(discoverySessions),
+  discoveries: many(discoveredSoftware),
+}));
+
+export const discoverySessionsRelations = relations(discoverySessions, ({ one, many }) => ({
+  tenant: one(tenants, {
+    fields: [discoverySessions.tenantId],
+    references: [tenants.id],
+  }),
+  agent: one(discoveryAgents, {
+    fields: [discoverySessions.agentId],
+    references: [discoveryAgents.id],
+  }),
+  discoveries: many(discoveredSoftware),
+}));
+
+export const discoveredSoftwareRelations = relations(discoveredSoftware, ({ one }) => ({
+  tenant: one(tenants, {
+    fields: [discoveredSoftware.tenantId],
+    references: [tenants.id],
+  }),
+  session: one(discoverySessions, {
+    fields: [discoveredSoftware.sessionId],
+    references: [discoverySessions.id],
+  }),
+  agent: one(discoveryAgents, {
+    fields: [discoveredSoftware.agentId],
+    references: [discoveryAgents.id],
+  }),
+  environment: one(environments, {
+    fields: [discoveredSoftware.environmentId],
+    references: [environments.id],
+  }),
+  department: one(departments, {
+    fields: [discoveredSoftware.departmentId],
+    references: [departments.id],
+  }),
+  asset: one(softwareAssets, {
+    fields: [discoveredSoftware.assetId],
+    references: [softwareAssets.id],
+  }),
+  reviewedByUser: one(users, {
+    fields: [discoveredSoftware.reviewedBy],
+    references: [users.id],
+  }),
+}));
+
 // Insert schemas
 export const insertTenantSchema = createInsertSchema(tenants).omit({
   id: true,
@@ -314,6 +425,22 @@ export const insertActivitySchema = createInsertSchema(activities).omit({
   createdAt: true,
 });
 
+export const insertDiscoveryAgentSchema = createInsertSchema(discoveryAgents).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertDiscoverySessionSchema = createInsertSchema(discoverySessions).omit({
+  id: true,
+  startedAt: true,
+});
+
+export const insertDiscoveredSoftwareSchema = createInsertSchema(discoveredSoftware).omit({
+  id: true,
+  discoveredAt: true,
+});
+
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -333,3 +460,9 @@ export type EnvironmentSoftware = typeof environmentSoftware.$inferSelect;
 export type InsertEnvironmentSoftware = z.infer<typeof insertEnvironmentSoftwareSchema>;
 export type Activity = typeof activities.$inferSelect;
 export type InsertActivity = z.infer<typeof insertActivitySchema>;
+export type DiscoveryAgent = typeof discoveryAgents.$inferSelect;
+export type InsertDiscoveryAgent = z.infer<typeof insertDiscoveryAgentSchema>;
+export type DiscoverySession = typeof discoverySessions.$inferSelect;
+export type InsertDiscoverySession = z.infer<typeof insertDiscoverySessionSchema>;
+export type DiscoveredSoftware = typeof discoveredSoftware.$inferSelect;
+export type InsertDiscoveredSoftware = z.infer<typeof insertDiscoveredSoftwareSchema>;
