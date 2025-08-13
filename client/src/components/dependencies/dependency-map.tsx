@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import ReactFlow, {
   Node,
@@ -35,15 +35,37 @@ export default function DependencyMap() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: software, isLoading: softwareLoading } = useQuery({
+  interface SoftwareAsset {
+    id: string;
+    name: string;
+    technology: string;
+    vendor?: string;
+  }
+
+  interface Dependency {
+    id: string;
+    parentSoftwareId: string;
+    dependentSoftwareId: string;
+    dependencyType: string;
+    parentSoftware: SoftwareAsset;
+    dependentSoftware: SoftwareAsset;
+  }
+
+  interface DashboardStats {
+    totalConnections: number;
+    criticalPaths: number;
+    isolatedAssets: number;
+  }
+
+  const { data: software = [], isLoading: softwareLoading } = useQuery<SoftwareAsset[]>({
     queryKey: ["/api/software"],
   });
 
-  const { data: dependencies, isLoading: dependenciesLoading } = useQuery({
+  const { data: dependencies = [], isLoading: dependenciesLoading } = useQuery<Dependency[]>({
     queryKey: ["/api/dependencies"],
   });
 
-  const { data: stats } = useQuery({
+  const { data: stats } = useQuery<DashboardStats>({
     queryKey: ["/api/dashboard/stats"],
   });
 
@@ -84,23 +106,117 @@ export default function DependencyMap() {
     },
   });
 
-  // Create nodes from software assets
+  // Create tree-structured nodes from software assets and dependencies
   const createNodes = useCallback((): Node[] => {
-    if (!software) return [];
+    if (!software.length) return [];
 
-    const nodeSpacing = 200;
-    const nodesPerRow = Math.ceil(Math.sqrt(software.length));
+    const softwareMap = new Map(software.map(s => [s.id, s]));
+    const dependencyMap = new Map<string, string[]>();
+    
+    // Group dependencies by parent
+    dependencies.forEach(dep => {
+      if (!dependencyMap.has(dep.parentSoftwareId)) {
+        dependencyMap.set(dep.parentSoftwareId, []);
+      }
+      dependencyMap.get(dep.parentSoftwareId)!.push(dep.dependentSoftwareId);
+    });
 
-    return software.map((asset, index) => {
-      const row = Math.floor(index / nodesPerRow);
-      const col = index % nodesPerRow;
-      
-      return {
+    // Find root nodes (software with no dependencies on them)
+    const dependentIds = new Set(dependencies?.map(d => d.dependentSoftwareId) || []);
+    const rootNodes = software.filter(s => !dependentIds.has(s.id));
+    
+    const nodes: Node[] = [];
+    const positions = new Map();
+    let yOffset = 0;
+
+    // Create hierarchical layout
+    const createTreeLevel = (nodeIds: string[], level: number, parentX?: number) => {
+      const levelSpacing = 250;
+      const nodeSpacing = 200;
+      const startX = parentX !== undefined ? parentX - ((nodeIds.length - 1) * nodeSpacing) / 2 : 0;
+
+      nodeIds.forEach((nodeId, index) => {
+        const asset = softwareMap.get(nodeId);
+        if (!asset) return;
+
+        const x = startX + (index * nodeSpacing);
+        const y = level * levelSpacing;
+        
+        positions.set(nodeId, { x, y });
+
+        // Get technology color
+        const getTechColor = (tech: string) => {
+          switch (tech?.toLowerCase()) {
+            case 'database': return { bg: '#fef2f2', border: '#ef4444' };
+            case 'web-app': return { bg: '#eff6ff', border: '#3b82f6' };
+            case 'api': return { bg: '#f3e8ff', border: '#8b5cf6' };
+            case 'desktop': return { bg: '#f0fdf4', border: '#10b981' };
+            case 'mobile': return { bg: '#fff7ed', border: '#f97316' };
+            case 'cloud': return { bg: '#f0f9ff', border: '#0ea5e9' };
+            default: return { bg: '#f8fafc', border: '#64748b' };
+          }
+        };
+
+        const colors = getTechColor(asset.technology);
+
+        nodes.push({
+          id: asset.id,
+          type: 'default',
+          position: { x, y },
+          data: {
+            label: (
+              <div className="text-center">
+                <div className="font-medium text-sm">{asset.name}</div>
+                <div className="text-xs text-slate-500">{asset.technology || 'Unknown'}</div>
+              </div>
+            ),
+          },
+          style: {
+            background: colors.bg,
+            border: `2px solid ${colors.border}`,
+            borderRadius: '8px',
+            padding: '12px',
+            minWidth: '140px',
+            fontSize: '12px',
+          },
+        });
+
+        // Process children
+        const children = dependencyMap.get(nodeId) || [];
+        if (children.length > 0) {
+          createTreeLevel(children, level + 1, x);
+        }
+      });
+    };
+
+    // Start with root nodes
+    createTreeLevel(rootNodes.map(n => n.id), 0);
+
+    // Add any isolated nodes that weren't processed
+    const processedIds = new Set(positions.keys());
+    const isolatedNodes = software.filter(s => !processedIds.has(s.id));
+    
+    // Define getTechColor function
+    const getTechColor = (tech: string) => {
+      switch (tech?.toLowerCase()) {
+        case 'database': return { bg: '#fef2f2', border: '#ef4444' };
+        case 'web-app': return { bg: '#eff6ff', border: '#3b82f6' };
+        case 'api': return { bg: '#f3e8ff', border: '#8b5cf6' };
+        case 'desktop': return { bg: '#f0fdf4', border: '#10b981' };
+        case 'mobile': return { bg: '#fff7ed', border: '#f97316' };
+        case 'cloud': return { bg: '#f0f9ff', border: '#0ea5e9' };
+        default: return { bg: '#f8fafc', border: '#64748b' };
+      }
+    };
+
+    isolatedNodes.forEach((asset, index) => {
+      const colors = getTechColor(asset.technology);
+      nodes.push({
         id: asset.id,
         type: 'default',
-        position: {
-          x: col * nodeSpacing,
-          y: row * nodeSpacing,
+        position: { 
+          x: (rootNodes.length + index) * 200, 
+          y: yOffset + 200 
         },
         data: {
           label: (
@@ -111,20 +227,21 @@ export default function DependencyMap() {
           ),
         },
         style: {
-          background: '#ffffff',
-          border: '2px solid #e2e8f0',
+          background: colors.bg,
+          border: `2px solid ${colors.border}`,
           borderRadius: '8px',
-          padding: '10px',
-          minWidth: '150px',
+          padding: '12px',
+          minWidth: '140px',
+          fontSize: '12px',
         },
-      };
+      });
     });
-  }, [software]);
+
+    return nodes;
+  }, [software, dependencies]);
 
   // Create edges from dependencies
   const createEdges = useCallback((): Edge[] => {
-    if (!dependencies) return [];
-
     return dependencies.map((dep) => ({
       id: dep.id,
       source: dep.parentSoftwareId,
@@ -135,6 +252,11 @@ export default function DependencyMap() {
         stroke: dep.dependencyType === 'required' ? '#ef4444' : 
                dep.dependencyType === 'optional' ? '#3b82f6' : '#8b5cf6',
         strokeWidth: 2,
+      },
+      markerEnd: {
+        type: 'arrowclosed',
+        color: dep.dependencyType === 'required' ? '#ef4444' : 
+               dep.dependencyType === 'optional' ? '#3b82f6' : '#8b5cf6',
       },
       label: dep.dependencyType,
       labelStyle: {
@@ -148,7 +270,7 @@ export default function DependencyMap() {
   const [edges, setEdges, onEdgesChange] = useEdgesState(createEdges());
 
   // Update nodes and edges when data changes
-  useState(() => {
+  useEffect(() => {
     setNodes(createNodes());
     setEdges(createEdges());
   }, [software, dependencies, createNodes, createEdges, setNodes, setEdges]);
@@ -226,7 +348,7 @@ export default function DependencyMap() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle>Dependency Map</CardTitle>
-            <Button onClick={() => setShowAddModal(true)} disabled={!software || software.length < 2}>
+            <Button onClick={() => setShowAddModal(true)} disabled={software.length < 2}>
               <i className="fas fa-plus mr-2"></i>
               Add Dependency
             </Button>
@@ -259,7 +381,7 @@ export default function DependencyMap() {
       {/* Dependency Visualization */}
       <Card>
         <CardContent className="p-0">
-          {!software || software.length === 0 ? (
+          {software.length === 0 ? (
             <div className="h-96 flex items-center justify-center">
               <div className="text-center">
                 <i className="fas fa-project-diagram text-slate-400 text-4xl mb-4"></i>
@@ -289,7 +411,7 @@ export default function DependencyMap() {
       </Card>
 
       {/* Dependencies List */}
-      {dependencies && dependencies.length > 0 && (
+      {dependencies.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle>Dependencies List</CardTitle>
@@ -332,7 +454,7 @@ export default function DependencyMap() {
                   <SelectValue placeholder="Select parent software" />
                 </SelectTrigger>
                 <SelectContent>
-                  {software?.map((asset) => (
+                  {software.map((asset) => (
                     <SelectItem key={asset.id} value={asset.id}>
                       {asset.name}
                     </SelectItem>
@@ -350,7 +472,7 @@ export default function DependencyMap() {
                   <SelectValue placeholder="Select dependent software" />
                 </SelectTrigger>
                 <SelectContent>
-                  {software?.filter(asset => asset.id !== selectedParent).map((asset) => (
+                  {software.filter(asset => asset.id !== selectedParent).map((asset) => (
                     <SelectItem key={asset.id} value={asset.id}>
                       {asset.name}
                     </SelectItem>
