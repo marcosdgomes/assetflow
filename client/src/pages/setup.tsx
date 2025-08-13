@@ -36,23 +36,23 @@ export default function Setup() {
   const mutation = useMutation({
     mutationFn: async (data: FormData) => {
       // Create tenant
-      const tenant = await apiRequest("/api/tenants", "POST", data);
+      const tenant = await apiRequest("POST", "/api/tenants", data);
       
       // Create sample department
-      await apiRequest("/api/departments", "POST", {
+      await apiRequest("POST", "/api/departments", {
         name: "IT Department",
         description: "Information Technology Department",
       });
       
       // Create sample environments
-      await apiRequest("/api/environments", "POST", {
+      await apiRequest("POST", "/api/environments", {
         name: "Production",
         type: "cloud",
         status: "active",
         description: "Production environment",
       });
       
-      await apiRequest("/api/environments", "POST", {
+      await apiRequest("POST", "/api/environments", {
         name: "Development",
         type: "on-premise",
         status: "active", 
