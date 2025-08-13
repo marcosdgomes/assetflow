@@ -91,6 +91,8 @@ export const softwareAssets = pgTable("software_assets", {
   licenseType: varchar("license_type"), // subscription, perpetual, open-source, internal
   status: varchar("status").notNull().default("active"), // active, inactive, deprecated, update-available
   isInternal: boolean("is_internal").default(false),
+  gitProvider: varchar("git_provider"), // gitlab, github, bitbucket, azure-devops
+  gitRepositoryUrl: varchar("git_repository_url"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

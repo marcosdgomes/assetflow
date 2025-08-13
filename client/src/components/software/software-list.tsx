@@ -23,6 +23,8 @@ interface SoftwareAsset {
   version?: string;
   licenseType?: string;
   departmentId?: string;
+  gitProvider?: string;
+  gitRepositoryUrl?: string;
   createdAt: string;
   updatedAt: string;
   department?: {

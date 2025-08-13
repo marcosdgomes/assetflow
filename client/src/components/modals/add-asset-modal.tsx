@@ -22,6 +22,8 @@ const formSchema = z.object({
   vendor: z.string().optional(),
   licenseType: z.string().optional(),
   description: z.string().optional(),
+  gitProvider: z.string().optional(),
+  gitRepositoryUrl: z.string().url("Please enter a valid URL").optional().or(z.literal("")),
   // Cost information
   costType: z.string().optional(),
   amount: z.string().optional(),
@@ -53,6 +55,8 @@ export default function AddAssetModal({ open, onOpenChange }: AddAssetModalProps
       vendor: "",
       licenseType: "subscription",
       description: "",
+      gitProvider: "",
+      gitRepositoryUrl: "",
       costType: "license",
       amount: "",
       currency: "USD",
@@ -284,6 +288,75 @@ export default function AddAssetModal({ open, onOpenChange }: AddAssetModalProps
                 </FormItem>
               )}
             />
+
+            <Separator />
+
+            {/* Git Repository Information */}
+            <div>
+              <h4 className="text-sm font-semibold text-slate-900 mb-4">Git Repository</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="gitProvider"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Git Provider</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select Git Provider" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="github">
+                            <div className="flex items-center">
+                              <i className="fab fa-github mr-2"></i>
+                              GitHub
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="gitlab">
+                            <div className="flex items-center">
+                              <i className="fab fa-gitlab mr-2"></i>
+                              GitLab
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="bitbucket">
+                            <div className="flex items-center">
+                              <i className="fab fa-bitbucket mr-2"></i>
+                              Bitbucket
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="azure-devops">
+                            <div className="flex items-center">
+                              <i className="fab fa-microsoft mr-2"></i>
+                              Azure DevOps
+                            </div>
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="gitRepositoryUrl"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Repository URL</FormLabel>
+                      <FormControl>
+                        <Input 
+                          placeholder="https://github.com/user/repo" 
+                          {...field} 
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
 
             <Separator />
 

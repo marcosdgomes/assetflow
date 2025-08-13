@@ -22,6 +22,8 @@ const formSchema = z.object({
   version: z.string().optional(),
   licenseType: z.string().optional(),
   departmentId: z.string().optional(),
+  gitProvider: z.string().optional(),
+  gitRepositoryUrl: z.string().url("Please enter a valid URL").optional().or(z.literal("")),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -37,6 +39,8 @@ interface SoftwareAsset {
   version?: string;
   licenseType?: string;
   departmentId?: string;
+  gitProvider?: string;
+  gitRepositoryUrl?: string;
   createdAt: string;
   updatedAt: string;
   department?: {
@@ -103,6 +107,8 @@ export default function EditSoftwareModal({ open, onOpenChange, software }: Edit
       version: "",
       licenseType: "",
       departmentId: "",
+      gitProvider: "",
+      gitRepositoryUrl: "",
     },
   });
 
@@ -118,6 +124,8 @@ export default function EditSoftwareModal({ open, onOpenChange, software }: Edit
         version: software.version || "",
         licenseType: software.licenseType || "",
         departmentId: software.departmentId || "none",
+        gitProvider: software.gitProvider || "",
+        gitRepositoryUrl: software.gitRepositoryUrl || "",
       });
     }
   }, [software, form]);
@@ -351,6 +359,69 @@ export default function EditSoftwareModal({ open, onOpenChange, software }: Edit
                 </FormItem>
               )}
             />
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="gitProvider"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Git Provider</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select Git Provider" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="github">
+                          <div className="flex items-center">
+                            <i className="fab fa-github mr-2"></i>
+                            GitHub
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="gitlab">
+                          <div className="flex items-center">
+                            <i className="fab fa-gitlab mr-2"></i>
+                            GitLab
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="bitbucket">
+                          <div className="flex items-center">
+                            <i className="fab fa-bitbucket mr-2"></i>
+                            Bitbucket
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="azure-devops">
+                          <div className="flex items-center">
+                            <i className="fab fa-microsoft mr-2"></i>
+                            Azure DevOps
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="gitRepositoryUrl"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Repository URL</FormLabel>
+                    <FormControl>
+                      <Input 
+                        placeholder="https://github.com/user/repo" 
+                        {...field} 
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
             <div className="flex justify-end space-x-2 pt-4">
               <Button 
