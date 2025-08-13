@@ -35,8 +35,18 @@ export default function Setup() {
 
   const mutation = useMutation({
     mutationFn: async (data: FormData) => {
+      // Generate slug from name
+      const slug = data.name
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, '')
+        .replace(/\s+/g, '-')
+        .slice(0, 50);
+      
       // Create tenant
-      const tenant = await apiRequest("POST", "/api/tenants", data);
+      const tenant = await apiRequest("POST", "/api/tenants", {
+        ...data,
+        slug,
+      });
       
       // Create sample department
       await apiRequest("POST", "/api/departments", {
