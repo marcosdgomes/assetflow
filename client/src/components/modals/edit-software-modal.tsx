@@ -22,6 +22,7 @@ const formSchema = z.object({
   version: z.string().optional(),
   licenseType: z.string().optional(),
   departmentId: z.string().optional(),
+  parentSoftwareId: z.string().optional(),
   gitProvider: z.string().optional(),
   gitRepositoryUrl: z.string().url("Please enter a valid URL").optional().or(z.literal("")),
 });
@@ -39,6 +40,7 @@ interface SoftwareAsset {
   version?: string;
   licenseType?: string;
   departmentId?: string;
+  parentSoftwareId?: string;
   gitProvider?: string;
   gitRepositoryUrl?: string;
   createdAt: string;
@@ -96,6 +98,10 @@ export default function EditSoftwareModal({ open, onOpenChange, software }: Edit
     queryKey: ["/api/departments"],
   });
 
+  const { data: parentSoftwareOptions = [] } = useQuery({
+    queryKey: ["/api/software"],
+  });
+
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -107,6 +113,7 @@ export default function EditSoftwareModal({ open, onOpenChange, software }: Edit
       version: "",
       licenseType: "",
       departmentId: "",
+      parentSoftwareId: "",
       gitProvider: "",
       gitRepositoryUrl: "",
     },
@@ -124,6 +131,7 @@ export default function EditSoftwareModal({ open, onOpenChange, software }: Edit
         version: software.version || "",
         licenseType: software.licenseType || "",
         departmentId: software.departmentId || "none",
+        parentSoftwareId: software.parentSoftwareId || "none",
         gitProvider: software.gitProvider || "",
         gitRepositoryUrl: software.gitRepositoryUrl || "",
       });
@@ -351,6 +359,32 @@ export default function EditSoftwareModal({ open, onOpenChange, software }: Edit
                       {departments.map((dept) => (
                         <SelectItem key={dept.id} value={dept.id}>
                           {dept.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="parentSoftwareId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Parent Software Asset</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select Parent (Optional)" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="none">No Parent</SelectItem>
+                      {parentSoftwareOptions?.filter((sw: any) => sw.id !== software?.id).map((sw: any) => (
+                        <SelectItem key={sw.id} value={sw.id}>
+                          {sw.name} ({sw.technology})
                         </SelectItem>
                       ))}
                     </SelectContent>

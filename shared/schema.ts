@@ -83,6 +83,7 @@ export const softwareAssets = pgTable("software_assets", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   departmentId: varchar("department_id").references(() => departments.id),
+  parentSoftwareId: varchar("parent_software_id").references(() => softwareAssets.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   description: text("description"),
   version: varchar("version"),
@@ -202,6 +203,14 @@ export const softwareAssetsRelations = relations(softwareAssets, ({ one, many })
   department: one(departments, {
     fields: [softwareAssets.departmentId],
     references: [departments.id],
+  }),
+  parentSoftware: one(softwareAssets, {
+    fields: [softwareAssets.parentSoftwareId],
+    references: [softwareAssets.id],
+    relationName: "softwareHierarchy",
+  }),
+  subSoftware: many(softwareAssets, {
+    relationName: "softwareHierarchy",
   }),
   versions: many(softwareVersions),
   costs: many(softwareCosts),

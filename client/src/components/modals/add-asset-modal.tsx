@@ -18,6 +18,7 @@ const formSchema = z.object({
   name: z.string().min(1, "Software name is required"),
   version: z.string().optional(),
   departmentId: z.string().optional(),
+  parentSoftwareId: z.string().optional(),
   technology: z.string().optional(),
   vendor: z.string().optional(),
   licenseType: z.string().optional(),
@@ -51,6 +52,7 @@ export default function AddAssetModal({ open, onOpenChange }: AddAssetModalProps
       name: "",
       version: "",
       departmentId: "",
+      parentSoftwareId: "none",
       technology: "",
       vendor: "",
       licenseType: "subscription",
@@ -72,6 +74,11 @@ export default function AddAssetModal({ open, onOpenChange }: AddAssetModalProps
 
   const { data: environments } = useQuery({
     queryKey: ["/api/environments"],
+    enabled: open,
+  });
+
+  const { data: parentSoftwareOptions } = useQuery({
+    queryKey: ["/api/software"],
     enabled: open,
   });
 
@@ -208,6 +215,34 @@ export default function AddAssetModal({ open, onOpenChange }: AddAssetModalProps
                 )}
               />
 
+              <FormField
+                control={form.control}
+                name="parentSoftwareId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Parent Software Asset</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select Parent (Optional)" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="none">No Parent</SelectItem>
+                        {parentSoftwareOptions?.map((software: any) => (
+                          <SelectItem key={software.id} value={software.id}>
+                            {software.name} ({software.technology})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="technology"

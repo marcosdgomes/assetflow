@@ -23,6 +23,7 @@ interface SoftwareAsset {
   version?: string;
   licenseType?: string;
   departmentId?: string;
+  parentSoftwareId?: string;
   gitProvider?: string;
   gitRepositoryUrl?: string;
   createdAt: string;
@@ -31,6 +32,7 @@ interface SoftwareAsset {
     id: string;
     name: string;
   };
+  subSoftware?: SoftwareAsset[];
 }
 
 export default function SoftwareList() {
@@ -40,6 +42,7 @@ export default function SoftwareList() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedSoftware, setSelectedSoftware] = useState<SoftwareAsset | null>(null);
+  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -50,6 +53,36 @@ export default function SoftwareList() {
   const { data: departments = [] } = useQuery({
     queryKey: ["/api/departments"],
   });
+
+  // Organize software assets into hierarchical structure
+  const organizeHierarchy = (assets: SoftwareAsset[]) => {
+    const assetsMap = new Map(assets.map(asset => [asset.id, { ...asset, subSoftware: [] }]));
+    const rootAssets: SoftwareAsset[] = [];
+
+    assets.forEach(asset => {
+      if (asset.parentSoftwareId && assetsMap.has(asset.parentSoftwareId)) {
+        const parent = assetsMap.get(asset.parentSoftwareId)!;
+        if (!parent.subSoftware) parent.subSoftware = [];
+        parent.subSoftware.push(assetsMap.get(asset.id)!);
+      } else {
+        rootAssets.push(assetsMap.get(asset.id)!);
+      }
+    });
+
+    return rootAssets;
+  };
+
+  const hierarchicalAssets = organizeHierarchy(software);
+
+  const toggleExpanded = (id: string) => {
+    const newExpanded = new Set(expandedItems);
+    if (newExpanded.has(id)) {
+      newExpanded.delete(id);
+    } else {
+      newExpanded.add(id);
+    }
+    setExpandedItems(newExpanded);
+  };
 
   const updateStatusMutation = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
@@ -137,7 +170,21 @@ export default function SoftwareList() {
     }
   };
 
-  const filteredSoftware = software.filter((item) => {
+  // Filter and flatten hierarchical assets for search
+  const flattenAssets = (assets: SoftwareAsset[]): SoftwareAsset[] => {
+    const flattened: SoftwareAsset[] = [];
+    assets.forEach(asset => {
+      flattened.push(asset);
+      if (asset.subSoftware) {
+        flattened.push(...flattenAssets(asset.subSoftware));
+      }
+    });
+    return flattened;
+  };
+
+  const allFlattened = flattenAssets(hierarchicalAssets);
+
+  const filteredSoftware = allFlattened.filter((item) => {
     const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          item.vendor?.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          item.description?.toLowerCase().includes(searchQuery.toLowerCase());
@@ -146,6 +193,11 @@ export default function SoftwareList() {
     
     return matchesSearch && matchesStatus && matchesTechnology;
   });
+
+  // When filtering, show flat list, otherwise show hierarchy
+  const displayAssets = searchQuery || statusFilter !== "all" || technologyFilter !== "all" 
+    ? filteredSoftware 
+    : hierarchicalAssets;
 
   const uniqueTechnologies = Array.from(new Set(software.map(s => s.technology).filter(Boolean)));
 
@@ -163,6 +215,104 @@ export default function SoftwareList() {
         variant: "destructive",
       });
     }
+  };
+
+  const renderSoftwareRow = (item: SoftwareAsset, index: number, allItems: SoftwareAsset[], level: number = 0): JSX.Element[] => {
+    const rows: JSX.Element[] = [];
+    const isExpanded = expandedItems.has(item.id);
+    const hasChildren = item.subSoftware && item.subSoftware.length > 0;
+
+    // Main row
+    rows.push(
+      <tr key={item.id} className={`border-b border-slate-100 ${index === allItems.length - 1 ? 'border-0' : ''}`}>
+        <td className="py-4">
+          <div className="flex items-center space-x-3" style={{ paddingLeft: `${level * 24}px` }}>
+            {hasChildren && (
+              <button
+                onClick={() => toggleExpanded(item.id)}
+                className="w-4 h-4 flex items-center justify-center text-slate-400 hover:text-slate-600"
+              >
+                <i className={`fas fa-chevron-${isExpanded ? 'down' : 'right'} text-xs`}></i>
+              </button>
+            )}
+            {!hasChildren && level > 0 && (
+              <div className="w-4 h-4 flex items-center justify-center">
+                <div className="w-2 h-2 bg-slate-300 rounded-full"></div>
+              </div>
+            )}
+            <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${getTechnologyColor(item.technology || "")}`}>
+              <i className={`${getTechnologyIcon(item.technology || "")} text-sm`}></i>
+            </div>
+            <div>
+              <p className="font-medium text-slate-900">{item.name}</p>
+              <p className="text-sm text-slate-500">{item.technology || "Unknown"}</p>
+            </div>
+          </div>
+        </td>
+        <td className="py-4">
+          <span className="font-mono text-sm">{item.version || "N/A"}</span>
+        </td>
+        <td className="py-4">
+          <span className="text-sm text-slate-600">{item.department?.name || "Unassigned"}</span>
+        </td>
+        <td className="py-4">
+          <span className="text-sm text-slate-600">{item.vendor || "N/A"}</span>
+        </td>
+        <td className="py-4">
+          <span className="text-sm text-slate-600 capitalize">
+            {item.licenseType?.replace("-", " ") || "N/A"}
+          </span>
+        </td>
+        <td className="py-4">
+          <Badge className={`text-xs ${getStatusColor(item.status)}`}>
+            {item.status.replace("-", " ").replace(/\b\w/g, l => l.toUpperCase())}
+          </Badge>
+        </td>
+        <td className="py-4">
+          <div className="flex items-center space-x-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => handleEditSoftware(item)}
+              className="h-8 w-8 p-0 hover:bg-slate-100"
+            >
+              <i className="fas fa-edit text-slate-600"></i>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => handleDeleteSoftware(item)}
+              className="h-8 w-8 p-0 hover:bg-red-50 hover:text-red-600"
+            >
+              <i className="fas fa-trash text-slate-600"></i>
+            </Button>
+            <Select
+              value={item.status}
+              onValueChange={(value) => updateStatusMutation.mutate({ id: item.id, status: value })}
+            >
+              <SelectTrigger className="w-24 h-8 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="update-available">Update Available</SelectItem>
+                <SelectItem value="deprecated">Deprecated</SelectItem>
+                <SelectItem value="inactive">Inactive</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </td>
+      </tr>
+    );
+
+    // Children rows (if expanded)
+    if (hasChildren && isExpanded) {
+      item.subSoftware!.forEach((child, childIndex) => {
+        rows.push(...renderSoftwareRow(child, childIndex, item.subSoftware!, level + 1));
+      });
+    }
+
+    return rows;
   };
 
   if (isLoading) {
@@ -297,74 +447,79 @@ export default function SoftwareList() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredSoftware.map((item, index) => (
-                    <tr key={item.id} className={`border-b border-slate-100 ${index === filteredSoftware.length - 1 ? 'border-0' : ''}`}>
-                      <td className="py-4">
-                        <div className="flex items-center space-x-3">
-                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${getTechnologyColor(item.technology || "")}`}>
-                            <i className={`${getTechnologyIcon(item.technology || "")} text-sm`}></i>
-                          </div>
-                          <div>
-                            <p className="font-medium text-slate-900">{item.name}</p>
-                            <p className="text-sm text-slate-500">{item.technology || "Unknown"}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-4">
-                        <span className="font-mono text-sm">{item.version || "N/A"}</span>
-                      </td>
-                      <td className="py-4">
-                        <span className="text-sm text-slate-600">{item.department?.name || "Unassigned"}</span>
-                      </td>
-                      <td className="py-4">
-                        <span className="text-sm text-slate-600">{item.vendor || "N/A"}</span>
-                      </td>
-                      <td className="py-4">
-                        <span className="text-sm text-slate-600 capitalize">
-                          {item.licenseType?.replace("-", " ") || "N/A"}
-                        </span>
-                      </td>
-                      <td className="py-4">
-                        <Badge className={`text-xs ${getStatusColor(item.status)}`}>
-                          {item.status.replace("-", " ").replace(/\b\w/g, l => l.toUpperCase())}
-                        </Badge>
-                      </td>
-                      <td className="py-4">
-                        <div className="flex items-center space-x-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleEditSoftware(item)}
-                            className="h-8 w-8 p-0 hover:bg-slate-100"
-                          >
-                            <i className="fas fa-edit text-slate-600"></i>
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDeleteSoftware(item)}
-                            className="h-8 w-8 p-0 hover:bg-red-50 hover:text-red-600"
-                          >
-                            <i className="fas fa-trash text-slate-600"></i>
-                          </Button>
-                          <Select
-                            value={item.status}
-                            onValueChange={(value) => updateStatusMutation.mutate({ id: item.id, status: value })}
-                          >
-                            <SelectTrigger className="w-24 h-8 text-xs">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="active">Active</SelectItem>
-                              <SelectItem value="update-available">Update Available</SelectItem>
-                              <SelectItem value="deprecated">Deprecated</SelectItem>
-                              <SelectItem value="inactive">Inactive</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                  {(searchQuery || statusFilter !== "all" || technologyFilter !== "all" 
+                    ? filteredSoftware.map((item, index) => (
+                        <tr key={item.id} className={`border-b border-slate-100 ${index === filteredSoftware.length - 1 ? 'border-0' : ''}`}>
+                          <td className="py-4">
+                            <div className="flex items-center space-x-3">
+                              <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${getTechnologyColor(item.technology || "")}`}>
+                                <i className={`${getTechnologyIcon(item.technology || "")} text-sm`}></i>
+                              </div>
+                              <div>
+                                <p className="font-medium text-slate-900">{item.name}</p>
+                                <p className="text-sm text-slate-500">{item.technology || "Unknown"}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-4">
+                            <span className="font-mono text-sm">{item.version || "N/A"}</span>
+                          </td>
+                          <td className="py-4">
+                            <span className="text-sm text-slate-600">{item.department?.name || "Unassigned"}</span>
+                          </td>
+                          <td className="py-4">
+                            <span className="text-sm text-slate-600">{item.vendor || "N/A"}</span>
+                          </td>
+                          <td className="py-4">
+                            <span className="text-sm text-slate-600 capitalize">
+                              {item.licenseType?.replace("-", " ") || "N/A"}
+                            </span>
+                          </td>
+                          <td className="py-4">
+                            <Badge className={`text-xs ${getStatusColor(item.status)}`}>
+                              {item.status.replace("-", " ").replace(/\b\w/g, l => l.toUpperCase())}
+                            </Badge>
+                          </td>
+                          <td className="py-4">
+                            <div className="flex items-center space-x-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleEditSoftware(item)}
+                                className="h-8 w-8 p-0 hover:bg-slate-100"
+                              >
+                                <i className="fas fa-edit text-slate-600"></i>
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDeleteSoftware(item)}
+                                className="h-8 w-8 p-0 hover:bg-red-50 hover:text-red-600"
+                              >
+                                <i className="fas fa-trash text-slate-600"></i>
+                              </Button>
+                              <Select
+                                value={item.status}
+                                onValueChange={(value) => updateStatusMutation.mutate({ id: item.id, status: value })}
+                              >
+                                <SelectTrigger className="w-24 h-8 text-xs">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="active">Active</SelectItem>
+                                  <SelectItem value="update-available">Update Available</SelectItem>
+                                  <SelectItem value="deprecated">Deprecated</SelectItem>
+                                  <SelectItem value="inactive">Inactive</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    : hierarchicalAssets.flatMap((item, index) => 
+                        renderSoftwareRow(item, index, hierarchicalAssets)
+                      )
+                  )}
                 </tbody>
               </table>
             </div>
