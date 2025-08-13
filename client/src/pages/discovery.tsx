@@ -302,7 +302,7 @@ export default function Discovery() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Automated Discovery</h1>
-          <p className="text-gray-600">Discover and manage software assets automatically</p>
+          <p className="text-gray-600">Discover and manage software assets automatically across your infrastructure</p>
         </div>
         <Dialog open={showAddAgentModal} onOpenChange={setShowAddAgentModal}>
           <DialogTrigger asChild>
@@ -430,6 +430,67 @@ export default function Discovery() {
         </Dialog>
       </div>
 
+      {/* Documentation Section */}
+      <Card className="bg-blue-50 border-blue-200">
+        <CardHeader>
+          <CardTitle className="flex items-center space-x-2">
+            <Eye className="h-5 w-5 text-blue-600" />
+            <span>How to Use Automated Discovery</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid md:grid-cols-3 gap-4">
+            <div>
+              <h4 className="font-semibold text-blue-900 mb-2">1. Create Discovery Agents</h4>
+              <p className="text-sm text-blue-800">
+                Set up automated discovery agents to scan your infrastructure. Choose from network scanning, 
+                API integrations, agent-based discovery, or registry scanning methods.
+              </p>
+            </div>
+            <div>
+              <h4 className="font-semibold text-blue-900 mb-2">2. Run Discovery Scans</h4>
+              <p className="text-sm text-blue-800">
+                Execute discovery agents to scan for installed software. Agents will automatically detect 
+                applications, versions, vendors, and installation paths across your environments.
+              </p>
+            </div>
+            <div>
+              <h4 className="font-semibold text-blue-900 mb-2">3. Review & Approve</h4>
+              <p className="text-sm text-blue-800">
+                Review discovered software with confidence scores. Approve items to automatically add them 
+                to your software inventory, or reject false positives to keep your data clean.
+              </p>
+            </div>
+          </div>
+          
+          <div className="border-t border-blue-200 pt-4">
+            <h4 className="font-semibold text-blue-900 mb-2">Discovery Methods</h4>
+            <div className="grid md:grid-cols-2 gap-3 text-sm">
+              <div>
+                <span className="font-medium text-blue-800">Network Scan:</span> Discovers software across network-connected devices
+              </div>
+              <div>
+                <span className="font-medium text-blue-800">API Integration:</span> Connects to external systems and APIs
+              </div>
+              <div>
+                <span className="font-medium text-blue-800">Agent-based:</span> Uses installed agents for deep system scanning
+              </div>
+              <div>
+                <span className="font-medium text-blue-800">Registry Scan:</span> Scans Windows registry and system catalogs
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg p-3 border border-blue-200">
+            <p className="text-sm text-blue-800">
+              <strong>Getting Started:</strong> Click "Add Discovery Agent" above to create your first discovery agent. 
+              Select a discovery method, optionally target a specific environment, and configure scanning parameters. 
+              Once created, use the "Run Scan" button to start discovering software automatically.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
       <Tabs defaultValue="agents" className="space-y-4">
         <TabsList>
           <TabsTrigger value="agents">Discovery Agents</TabsTrigger>
@@ -452,6 +513,25 @@ export default function Discovery() {
                 </Card>
               ))}
             </div>
+          ) : agents.length === 0 ? (
+            <Card className="text-center py-12">
+              <CardContent>
+                <Server className="h-16 w-16 mx-auto text-gray-400 mb-4" />
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">No Discovery Agents Yet</h3>
+                <p className="text-gray-600 mb-6 max-w-md mx-auto">
+                  Create your first discovery agent to start automatically finding software across your infrastructure. 
+                  Agents can scan networks, integrate with APIs, or use system-level detection methods.
+                </p>
+                <Dialog open={showAddAgentModal} onOpenChange={setShowAddAgentModal}>
+                  <DialogTrigger asChild>
+                    <Button>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Create First Discovery Agent
+                    </Button>
+                  </DialogTrigger>
+                </Dialog>
+              </CardContent>
+            </Card>
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {agents.map((agent: DiscoveryAgent) => (
@@ -514,6 +594,17 @@ export default function Discovery() {
                 </Card>
               ))}
             </div>
+          ) : sessions.length === 0 ? (
+            <Card className="text-center py-12">
+              <CardContent>
+                <Activity className="h-16 w-16 mx-auto text-gray-400 mb-4" />
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">No Discovery Sessions</h3>
+                <p className="text-gray-600 mb-6 max-w-md mx-auto">
+                  Discovery sessions are created when you run discovery agents. Each session tracks the scanning 
+                  progress, results, and discovered software. Create and run a discovery agent to see sessions here.
+                </p>
+              </CardContent>
+            </Card>
           ) : (
             <div className="space-y-4">
               {sessions.map((session: DiscoverySession) => (
@@ -568,6 +659,25 @@ export default function Discovery() {
                 </Card>
               ))}
             </div>
+          ) : discovered.length === 0 ? (
+            <Card className="text-center py-12">
+              <CardContent>
+                <Search className="h-16 w-16 mx-auto text-gray-400 mb-4" />
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">No Software Discovered Yet</h3>
+                <p className="text-gray-600 mb-6 max-w-md mx-auto">
+                  When discovery agents scan your infrastructure, found software will appear here with confidence 
+                  scores and detection details. You can then approve items to add them to your software inventory 
+                  or reject false positives.
+                </p>
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 max-w-lg mx-auto">
+                  <p className="text-sm text-amber-800">
+                    <strong>Demo Mode:</strong> Discovery agents simulate finding popular software like Microsoft Office, 
+                    Chrome, and Docker for demonstration purposes. In production, agents would connect to real 
+                    infrastructure and use actual discovery protocols.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
           ) : (
             <div className="space-y-4">
               {discovered.map((item: DiscoveredSoftware) => (
