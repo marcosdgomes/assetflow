@@ -368,7 +368,7 @@ export default function Discovery() {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="">All Environments</SelectItem>
+                          <SelectItem value="all">All Environments</SelectItem>
                           {environments.map((env: any) => (
                             <SelectItem key={env.id} value={env.id}>
                               {env.name}
