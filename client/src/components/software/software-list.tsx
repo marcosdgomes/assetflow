@@ -10,20 +10,42 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import AddAssetModal from "@/components/modals/add-asset-modal";
+import EditSoftwareModal from "@/components/modals/edit-software-modal";
+
+interface SoftwareAsset {
+  id: string;
+  tenantId: string;
+  name: string;
+  vendor?: string;
+  description?: string;
+  technology: string;
+  status: string;
+  version?: string;
+  licenseType?: string;
+  departmentId?: string;
+  createdAt: string;
+  updatedAt: string;
+  department?: {
+    id: string;
+    name: string;
+  };
+}
 
 export default function SoftwareList() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [technologyFilter, setTechnologyFilter] = useState("all");
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [selectedSoftware, setSelectedSoftware] = useState<SoftwareAsset | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: software, isLoading } = useQuery({
+  const { data: software = [], isLoading } = useQuery<SoftwareAsset[]>({
     queryKey: ["/api/software"],
   });
 
-  const { data: departments } = useQuery({
+  const { data: departments = [] } = useQuery({
     queryKey: ["/api/departments"],
   });
 
@@ -113,7 +135,7 @@ export default function SoftwareList() {
     }
   };
 
-  const filteredSoftware = software?.filter((item) => {
+  const filteredSoftware = software.filter((item) => {
     const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          item.vendor?.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          item.description?.toLowerCase().includes(searchQuery.toLowerCase());
@@ -121,9 +143,25 @@ export default function SoftwareList() {
     const matchesTechnology = technologyFilter === "all" || item.technology === technologyFilter;
     
     return matchesSearch && matchesStatus && matchesTechnology;
-  }) || [];
+  });
 
-  const uniqueTechnologies = [...new Set(software?.map(s => s.technology).filter(Boolean))] || [];
+  const uniqueTechnologies = [...new Set(software.map(s => s.technology).filter(Boolean))];
+
+  const handleEditSoftware = (software: SoftwareAsset) => {
+    setSelectedSoftware(software);
+    setShowEditModal(true);
+  };
+
+  const handleDeleteSoftware = (software: SoftwareAsset) => {
+    if (window.confirm(`Are you sure you want to delete "${software.name}"?`)) {
+      // TODO: Implement delete functionality
+      toast({
+        title: "Delete Functionality",
+        description: "Delete functionality will be implemented soon.",
+        variant: "destructive",
+      });
+    }
+  };
 
   if (isLoading) {
     return (
@@ -227,15 +265,15 @@ export default function SoftwareList() {
             <div className="text-center py-12">
               <i className="fas fa-desktop text-slate-400 text-4xl mb-4"></i>
               <h3 className="text-lg font-medium text-slate-900 mb-2">
-                {software?.length === 0 ? "No software assets found" : "No matching software found"}
+                {software.length === 0 ? "No software assets found" : "No matching software found"}
               </h3>
               <p className="text-slate-500 mb-6">
-                {software?.length === 0 
+                {software.length === 0 
                   ? "Add your first software asset to get started with tracking your portfolio"
                   : "Try adjusting your search terms or filters"
                 }
               </p>
-              {software?.length === 0 && (
+              {software.length === 0 && (
                 <Button onClick={() => setShowAddModal(true)}>
                   <i className="fas fa-plus mr-2"></i>
                   Add First Software Asset
@@ -291,11 +329,27 @@ export default function SoftwareList() {
                       </td>
                       <td className="py-4">
                         <div className="flex items-center space-x-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEditSoftware(item)}
+                            className="h-8 w-8 p-0 hover:bg-slate-100"
+                          >
+                            <i className="fas fa-edit text-slate-600"></i>
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteSoftware(item)}
+                            className="h-8 w-8 p-0 hover:bg-red-50 hover:text-red-600"
+                          >
+                            <i className="fas fa-trash text-slate-600"></i>
+                          </Button>
                           <Select
                             value={item.status}
                             onValueChange={(value) => updateStatusMutation.mutate({ id: item.id, status: value })}
                           >
-                            <SelectTrigger className="w-32 h-8 text-xs">
+                            <SelectTrigger className="w-24 h-8 text-xs">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -319,6 +373,12 @@ export default function SoftwareList() {
       <AddAssetModal 
         open={showAddModal} 
         onOpenChange={setShowAddModal}
+      />
+      
+      <EditSoftwareModal
+        open={showEditModal}
+        onOpenChange={setShowEditModal}
+        software={selectedSoftware}
       />
     </div>
   );
