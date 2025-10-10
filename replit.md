@@ -36,6 +36,16 @@ Preferred communication style: Simple, everyday language.
 - **Isolation**: Tenant-based data isolation with user-tenant relationship mapping
 - **Security**: Row-level security through tenant ID filtering in all queries
 - **Scalability**: Shared database with logical separation for cost-effective multi-tenancy
+- **Access Control**: 
+  - **Super Admin Role**: Platform-wide administrators who can create and manage multiple tenants and their users
+  - **Tenant Admin Role**: Per-tenant administrators who manage resources within their tenant
+  - **User Role**: Regular users with access to tenant resources based on permissions
+- **Super Admin Features**:
+  - Create and manage multiple tenants
+  - Create admin users for each tenant
+  - Promote users to super admin (only existing super admins or first user self-promotion)
+  - View all users and tenants across the platform
+  - Full CRUD operations on tenants and user-tenant relationships
 
 ### Component Architecture
 - **Design System**: Radix UI primitives with custom styling for accessibility and consistency

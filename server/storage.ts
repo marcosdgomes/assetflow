@@ -37,6 +37,9 @@ import {
   type InsertDiscoverySession,
   type DiscoveredSoftware,
   type InsertDiscoveredSoftware,
+  type InsertUser,
+  type UserTenant,
+  type InsertUserTenant,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc } from "drizzle-orm";
@@ -46,9 +49,27 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
   
+  // Super Admin - User operations
+  getAllUsers(): Promise<(User & { tenants?: (UserTenant & { tenant: Tenant })[] })[]>;
+  createUser(user: InsertUser): Promise<User>;
+  updateUserRole(userId: string, role: string): Promise<User | undefined>;
+  hasSuperAdmin(): Promise<boolean>;
+  
   // Tenant operations
   getTenantByUserId(userId: string): Promise<Tenant | undefined>;
   createTenant(tenant: InsertTenant, userId: string): Promise<Tenant>;
+  
+  // Super Admin - Tenant operations
+  getAllTenants(): Promise<(Tenant & { userCount?: number })[]>;
+  getTenantById(tenantId: string): Promise<Tenant | undefined>;
+  updateTenant(tenantId: string, updates: Partial<InsertTenant>): Promise<Tenant | undefined>;
+  deleteTenant(tenantId: string): Promise<boolean>;
+  
+  // Super Admin - User-Tenant operations
+  getUsersByTenantId(tenantId: string): Promise<(UserTenant & { user: User })[]>;
+  addUserToTenant(userId: string, tenantId: string, role: string): Promise<UserTenant>;
+  removeUserFromTenant(userId: string, tenantId: string): Promise<boolean>;
+  updateUserTenantRole(userId: string, tenantId: string, role: string): Promise<UserTenant | undefined>;
   
   // Department operations
   getDepartmentsByTenantId(tenantId: string): Promise<Department[]>;
@@ -138,6 +159,57 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
+  // Super Admin - User operations
+  async getAllUsers(): Promise<(User & { tenants?: (UserTenant & { tenant: Tenant })[] })[]> {
+    const allUsers = await db.select().from(users);
+    
+    const usersWithTenants = await Promise.all(
+      allUsers.map(async (user) => {
+        const userTenantData = await db
+          .select({
+            userTenant: userTenants,
+            tenant: tenants,
+          })
+          .from(userTenants)
+          .innerJoin(tenants, eq(tenants.id, userTenants.tenantId))
+          .where(eq(userTenants.userId, user.id));
+        
+        return {
+          ...user,
+          tenants: userTenantData.map(({ userTenant, tenant }) => ({
+            ...userTenant,
+            tenant,
+          })),
+        };
+      })
+    );
+    
+    return usersWithTenants;
+  }
+
+  async createUser(userData: InsertUser): Promise<User> {
+    const [user] = await db.insert(users).values(userData).returning();
+    return user;
+  }
+
+  async updateUserRole(userId: string, role: string): Promise<User | undefined> {
+    const [user] = await db
+      .update(users)
+      .set({ role, updatedAt: new Date() })
+      .where(eq(users.id, userId))
+      .returning();
+    return user;
+  }
+
+  async hasSuperAdmin(): Promise<boolean> {
+    const [superAdmin] = await db
+      .select()
+      .from(users)
+      .where(eq(users.role, "super-admin"))
+      .limit(1);
+    return !!superAdmin;
+  }
+
   // Tenant operations
   async getTenantByUserId(userId: string): Promise<Tenant | undefined> {
     const [userTenant] = await db
@@ -161,6 +233,87 @@ export class DatabaseStorage implements IStorage {
     });
     
     return newTenant;
+  }
+
+  // Super Admin - Tenant operations
+  async getAllTenants(): Promise<(Tenant & { userCount?: number })[]> {
+    const allTenants = await db.select().from(tenants);
+    
+    const tenantsWithCounts = await Promise.all(
+      allTenants.map(async (tenant) => {
+        const [count] = await db
+          .select({ count: db.$count(userTenants.id) })
+          .from(userTenants)
+          .where(eq(userTenants.tenantId, tenant.id));
+        
+        return {
+          ...tenant,
+          userCount: Number(count?.count || 0),
+        };
+      })
+    );
+    
+    return tenantsWithCounts;
+  }
+
+  async getTenantById(tenantId: string): Promise<Tenant | undefined> {
+    const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId));
+    return tenant;
+  }
+
+  async updateTenant(tenantId: string, updates: Partial<InsertTenant>): Promise<Tenant | undefined> {
+    const [tenant] = await db
+      .update(tenants)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(tenants.id, tenantId))
+      .returning();
+    return tenant;
+  }
+
+  async deleteTenant(tenantId: string): Promise<boolean> {
+    await db.delete(tenants).where(eq(tenants.id, tenantId));
+    return true;
+  }
+
+  // Super Admin - User-Tenant operations
+  async getUsersByTenantId(tenantId: string): Promise<(UserTenant & { user: User })[]> {
+    const results = await db
+      .select({
+        userTenant: userTenants,
+        user: users,
+      })
+      .from(userTenants)
+      .innerJoin(users, eq(users.id, userTenants.userId))
+      .where(eq(userTenants.tenantId, tenantId));
+    
+    return results.map(({ userTenant, user }) => ({
+      ...userTenant,
+      user,
+    }));
+  }
+
+  async addUserToTenant(userId: string, tenantId: string, role: string): Promise<UserTenant> {
+    const [userTenant] = await db
+      .insert(userTenants)
+      .values({ userId, tenantId, role })
+      .returning();
+    return userTenant;
+  }
+
+  async removeUserFromTenant(userId: string, tenantId: string): Promise<boolean> {
+    await db
+      .delete(userTenants)
+      .where(and(eq(userTenants.userId, userId), eq(userTenants.tenantId, tenantId)));
+    return true;
+  }
+
+  async updateUserTenantRole(userId: string, tenantId: string, role: string): Promise<UserTenant | undefined> {
+    const [userTenant] = await db
+      .update(userTenants)
+      .set({ role })
+      .where(and(eq(userTenants.userId, userId), eq(userTenants.tenantId, tenantId)))
+      .returning();
+    return userTenant;
   }
 
   // Department operations

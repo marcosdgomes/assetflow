@@ -14,9 +14,30 @@ import {
   insertDiscoveryAgentSchema,
   insertDiscoverySessionSchema,
   insertDiscoveredSoftwareSchema,
+  insertUserSchema,
 } from "@shared/schema";
 import { z } from "zod";
 import { fromZodError } from "zod-validation-error";
+
+// Super Admin middleware
+const isSuperAdmin = async (req: any, res: any, next: any) => {
+  try {
+    const userId = req.user?.claims?.sub;
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    
+    const user = await storage.getUser(userId);
+    if (!user || user.role !== "super-admin") {
+      return res.status(403).json({ message: "Super admin access required" });
+    }
+    
+    next();
+  } catch (error) {
+    console.error("Error checking super admin:", error);
+    res.status(500).json({ message: "Failed to verify permissions" });
+  }
+};
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
@@ -33,6 +54,236 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
+
+  // Promote to super admin (only if no super admin exists - self-promotion for first user only)
+  app.post("/api/auth/promote-to-super-admin", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      
+      // Check if a super admin already exists
+      const hasSuperAdmin = await storage.hasSuperAdmin();
+      if (hasSuperAdmin) {
+        return res.status(403).json({ message: "A super admin already exists. Only existing super admins can promote other users." });
+      }
+      
+      // Promote the current user to super admin
+      const user = await storage.updateUserRole(userId, "super-admin");
+      
+      // Log the promotion
+      console.log(`User ${userId} (${user?.email}) promoted to super admin`);
+      
+      res.json(user);
+    } catch (error) {
+      console.error("Error promoting to super admin:", error);
+      res.status(500).json({ message: "Failed to promote to super admin" });
+    }
+  });
+
+  // Super Admin - User Management
+  app.get("/api/admin/users", isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const users = await storage.getAllUsers();
+      res.json(users);
+    } catch (error) {
+      console.error("Error fetching users:", error);
+      res.status(500).json({ message: "Failed to fetch users" });
+    }
+  });
+
+  app.post("/api/admin/users", isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const validatedData = insertUserSchema.parse(req.body);
+      const user = await storage.createUser(validatedData);
+      res.json(user);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: fromZodError(error).message });
+      }
+      console.error("Error creating user:", error);
+      res.status(500).json({ message: "Failed to create user" });
+    }
+  });
+
+  app.patch("/api/admin/users/:id/role", isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const { role } = req.body;
+      const superAdminId = req.user.claims.sub;
+      
+      if (!role || !["user", "super-admin"].includes(role)) {
+        return res.status(400).json({ message: "Invalid role. Must be 'user' or 'super-admin'" });
+      }
+      
+      // Prevent users from demoting themselves
+      if (id === superAdminId && role !== "super-admin") {
+        return res.status(400).json({ message: "Cannot demote yourself from super admin" });
+      }
+      
+      const user = await storage.updateUserRole(id, role);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      // Log the role change
+      console.log(`Super admin ${superAdminId} changed user ${id} role to ${role}`);
+      
+      res.json(user);
+    } catch (error) {
+      console.error("Error updating user role:", error);
+      res.status(500).json({ message: "Failed to update user role" });
+    }
+  });
+
+  // Super Admin - Tenant Management
+  app.get("/api/admin/tenants", isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const tenants = await storage.getAllTenants();
+      res.json(tenants);
+    } catch (error) {
+      console.error("Error fetching tenants:", error);
+      res.status(500).json({ message: "Failed to fetch tenants" });
+    }
+  });
+
+  app.post("/api/admin/tenants", isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const { tenant, adminUser } = req.body;
+      const superAdminId = req.user.claims.sub;
+      
+      const validatedTenant = insertTenantSchema.parse(tenant);
+      const validatedUser = insertUserSchema.parse(adminUser);
+      
+      // Ensure the user being created has regular user role (not super-admin)
+      if (validatedUser.role === "super-admin") {
+        return res.status(400).json({ message: "Cannot create super admin through tenant creation" });
+      }
+      
+      // Create user first
+      const newUser = await storage.createUser(validatedUser);
+      
+      // Create tenant with the new user as admin (this also adds them to userTenants)
+      const newTenant = await storage.createTenant(validatedTenant, newUser.id);
+      
+      // Log the creation
+      console.log(`Super admin ${superAdminId} created tenant ${newTenant.id} with admin user ${newUser.id}`);
+      
+      res.json({ tenant: newTenant, user: newUser });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: fromZodError(error).message });
+      }
+      console.error("Error creating tenant:", error);
+      res.status(500).json({ message: "Failed to create tenant" });
+    }
+  });
+
+  app.get("/api/admin/tenants/:id", isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const tenant = await storage.getTenantById(id);
+      
+      if (!tenant) {
+        return res.status(404).json({ message: "Tenant not found" });
+      }
+      
+      res.json(tenant);
+    } catch (error) {
+      console.error("Error fetching tenant:", error);
+      res.status(500).json({ message: "Failed to fetch tenant" });
+    }
+  });
+
+  app.patch("/api/admin/tenants/:id", isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const updates = insertTenantSchema.partial().parse(req.body);
+      
+      const tenant = await storage.updateTenant(id, updates);
+      if (!tenant) {
+        return res.status(404).json({ message: "Tenant not found" });
+      }
+      
+      res.json(tenant);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: fromZodError(error).message });
+      }
+      console.error("Error updating tenant:", error);
+      res.status(500).json({ message: "Failed to update tenant" });
+    }
+  });
+
+  app.delete("/api/admin/tenants/:id", isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteTenant(id);
+      res.json({ message: "Tenant deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting tenant:", error);
+      res.status(500).json({ message: "Failed to delete tenant" });
+    }
+  });
+
+  // Super Admin - Tenant User Management
+  app.get("/api/admin/tenants/:id/users", isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const users = await storage.getUsersByTenantId(id);
+      res.json(users);
+    } catch (error) {
+      console.error("Error fetching tenant users:", error);
+      res.status(500).json({ message: "Failed to fetch tenant users" });
+    }
+  });
+
+  app.post("/api/admin/tenants/:id/users", isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const { id: tenantId } = req.params;
+      const { userId, role } = req.body;
+      
+      if (!userId || !role) {
+        return res.status(400).json({ message: "userId and role are required" });
+      }
+      
+      const userTenant = await storage.addUserToTenant(userId, tenantId, role);
+      res.json(userTenant);
+    } catch (error) {
+      console.error("Error adding user to tenant:", error);
+      res.status(500).json({ message: "Failed to add user to tenant" });
+    }
+  });
+
+  app.delete("/api/admin/tenants/:tenantId/users/:userId", isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const { tenantId, userId } = req.params;
+      await storage.removeUserFromTenant(userId, tenantId);
+      res.json({ message: "User removed from tenant successfully" });
+    } catch (error) {
+      console.error("Error removing user from tenant:", error);
+      res.status(500).json({ message: "Failed to remove user from tenant" });
+    }
+  });
+
+  app.patch("/api/admin/tenants/:tenantId/users/:userId/role", isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const { tenantId, userId } = req.params;
+      const { role } = req.body;
+      
+      if (!role || !["admin", "user"].includes(role)) {
+        return res.status(400).json({ message: "Invalid role" });
+      }
+      
+      const userTenant = await storage.updateUserTenantRole(userId, tenantId, role);
+      if (!userTenant) {
+        return res.status(404).json({ message: "User tenant relationship not found" });
+      }
+      
+      res.json(userTenant);
+    } catch (error) {
+      console.error("Error updating user tenant role:", error);
+      res.status(500).json({ message: "Failed to update user tenant role" });
     }
   });
 

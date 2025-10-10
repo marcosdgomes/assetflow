@@ -14,6 +14,8 @@ import Discovery from "@/pages/discovery";
 import Environments from "@/pages/environments";
 import Dependencies from "@/pages/dependencies";
 import Costs from "@/pages/costs";
+import AdminDashboard from "@/pages/admin-dashboard";
+import AdminTenantDetail from "@/pages/admin-tenant-detail";
 
 function Router() {
   const { user, isAuthenticated, isLoading } = useAuth();
@@ -36,10 +38,19 @@ function Router() {
     );
   }
 
+  // Check if user is super admin
+  const isSuperAdmin = user?.role === "super-admin";
+
   return (
     <Switch>
       {!isAuthenticated ? (
         <Route path="/" component={Landing} />
+      ) : isSuperAdmin ? (
+        <>
+          <Route path="/" component={AdminDashboard} />
+          <Route path="/admin" component={AdminDashboard} />
+          <Route path="/admin/tenants/:id" component={AdminTenantDetail} />
+        </>
       ) : !tenant ? (
         <Route path="/" component={Setup} />
       ) : (

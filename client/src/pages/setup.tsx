@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
+import { Shield } from "lucide-react";
 
 const formSchema = z.object({
   name: z.string().min(1, "Company name is required"),
@@ -23,6 +24,7 @@ export default function Setup() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [isSetupComplete, setIsSetupComplete] = useState(false);
+  const [showSuperAdminOption, setShowSuperAdminOption] = useState(false);
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -87,6 +89,29 @@ export default function Setup() {
       toast({
         title: "Setup Error",
         description: error.message || "Failed to create workspace",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const promoteMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("/api/auth/promote-to-super-admin", "POST");
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "You are now a super admin. Redirecting to admin dashboard...",
+      });
+      
+      setTimeout(() => {
+        window.location.href = "/admin";
+      }, 2000);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to promote to super admin",
         variant: "destructive",
       });
     },
@@ -179,6 +204,41 @@ export default function Setup() {
           
           <div className="mt-6 text-center text-sm text-slate-600">
             <p>This will create your tenant and sample data to get started.</p>
+          </div>
+
+          <div className="mt-6 pt-6 border-t">
+            <div className="text-center">
+              <p className="text-sm text-slate-600 mb-3">
+                Are you the first user setting up this platform?
+              </p>
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => setShowSuperAdminOption(!showSuperAdminOption)}
+                data-testid="button-toggle-super-admin"
+              >
+                <Shield className="mr-2 h-4 w-4" />
+                {showSuperAdminOption ? "Hide" : "Show"} Super Admin Setup
+              </Button>
+            </div>
+
+            {showSuperAdminOption && (
+              <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <p className="text-sm text-slate-700 mb-3">
+                  As a super admin, you'll be able to create and manage multiple tenants and their users.
+                  This is typically used by platform administrators.
+                </p>
+                <Button
+                  variant="default"
+                  className="w-full"
+                  onClick={() => promoteMutation.mutate()}
+                  disabled={promoteMutation.isPending}
+                  data-testid="button-become-super-admin"
+                >
+                  {promoteMutation.isPending ? "Promoting..." : "Become Super Admin"}
+                </Button>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

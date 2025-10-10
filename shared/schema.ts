@@ -32,6 +32,7 @@ export const users = pgTable("users", {
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),
+  role: varchar("role").notNull().default("user"), // super-admin, user
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -79,11 +80,11 @@ export const environments = pgTable("environments", {
 });
 
 // Software assets
-export const softwareAssets = pgTable("software_assets", {
+export const softwareAssets: any = pgTable("software_assets", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   departmentId: varchar("department_id").references(() => departments.id),
-  parentSoftwareId: varchar("parent_software_id").references(() => softwareAssets.id, { onDelete: "cascade" }),
+  parentSoftwareId: varchar("parent_software_id"),
   name: text("name").notNull(),
   description: text("description"),
   version: varchar("version"),
@@ -250,7 +251,7 @@ export const environmentsRelations = relations(environments, ({ one, many }) => 
   environmentSoftware: many(environmentSoftware),
 }));
 
-export const softwareAssetsRelations = relations(softwareAssets, ({ one, many }) => ({
+export const softwareAssetsRelations: any = relations(softwareAssets, ({ one, many }) => ({
   tenant: one(tenants, {
     fields: [softwareAssets.tenantId],
     references: [tenants.id],
@@ -380,6 +381,17 @@ export const discoveredSoftwareRelations = relations(discoveredSoftware, ({ one 
 }));
 
 // Insert schemas
+export const insertUserSchema = createInsertSchema(users).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertUserTenantSchema = createInsertSchema(userTenants).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const insertTenantSchema = createInsertSchema(tenants).omit({
   id: true,
   createdAt: true,
@@ -444,6 +456,9 @@ export const insertDiscoveredSoftwareSchema = createInsertSchema(discoveredSoftw
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
+export type InsertUser = z.infer<typeof insertUserSchema>;
+export type UserTenant = typeof userTenants.$inferSelect;
+export type InsertUserTenant = z.infer<typeof insertUserTenantSchema>;
 export type Tenant = typeof tenants.$inferSelect;
 export type InsertTenant = z.infer<typeof insertTenantSchema>;
 export type Department = typeof departments.$inferSelect;
