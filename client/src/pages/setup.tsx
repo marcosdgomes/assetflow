@@ -96,7 +96,7 @@ export default function Setup() {
 
   const promoteMutation = useMutation({
     mutationFn: async () => {
-      return await apiRequest("/api/auth/promote-to-super-admin", "POST");
+      return await apiRequest("POST", "/api/auth/promote-to-super-admin");
     },
     onSuccess: () => {
       toast({

@@ -62,7 +62,7 @@ export default function AdminDashboard() {
 
   const createTenantMutation = useMutation({
     mutationFn: async (data: CreateTenantFormData) => {
-      await apiRequest("/api/admin/tenants", "POST", data);
+      await apiRequest("POST", "/api/admin/tenants", data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/tenants"] });
