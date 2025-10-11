@@ -11,6 +11,7 @@ jobs:
     permissions:
       contents: read
       packages: write 
+      security-events: write
 
     steps:
       - name: Checkout repository
@@ -47,15 +48,17 @@ jobs:
         if: always()
         with:
           sarif_file: 'trivy-results.sarif'
+          category: trivy
 
       - name: Generate Trivy Summary
         if: always()
         run: |
           docker run --rm \
             -v /var/run/docker.sock:/var/run/docker.sock \
+            -v ${{ github.workspace }}:/output \
             aquasec/trivy image \
             --format json \
-            --output trivy-report.json \
+            --output /output/trivy-report.json \
             --severity CRITICAL,HIGH,MEDIUM,LOW \
             --ignore-unfixed \
             ghcr.io/${{ github.repository }}:latest
@@ -63,10 +66,10 @@ jobs:
           echo "## 🔍 Trivy Security Scan Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
-          CRITICAL=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' trivy-report.json)
-          HIGH=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="HIGH")] | length' trivy-report.json)
-          MEDIUM=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="MEDIUM")] | length' trivy-report.json)
-          LOW=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="LOW")] | length' trivy-report.json)
+          CRITICAL=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' trivy-report.json 2>/dev/null || echo "0")
+          HIGH=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="HIGH")] | length' trivy-report.json 2>/dev/null || echo "0")
+          MEDIUM=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="MEDIUM")] | length' trivy-report.json 2>/dev/null || echo "0")
+          LOW=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="LOW")] | length' trivy-report.json 2>/dev/null || echo "0")
           
           echo "| Severity | Count |" >> $GITHUB_STEP_SUMMARY
           echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
@@ -76,6 +79,16 @@ jobs:
           echo "| 🟢 Low | $LOW |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Image:** \`ghcr.io/${{ github.repository }}:latest\`" >> $GITHUB_STEP_SUMMARY
+          
+          # Show top 10 critical/high vulnerabilities if any
+          if [ "$CRITICAL" != "0" ] || [ "$HIGH" != "0" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### 🔴 Top Critical/High Vulnerabilities" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            jq -r '.Results[]?.Vulnerabilities[]? | select(.Severity=="CRITICAL" or .Severity=="HIGH") | "\(.Severity): \(.VulnerabilityID) in \(.PkgName) \(.InstalledVersion)"' trivy-report.json | head -n 10 >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          fi
 
       - name: Trigger Portainer webhook
         uses: distributhor/workflow-webhook@v3

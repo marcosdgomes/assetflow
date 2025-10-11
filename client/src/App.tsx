@@ -5,7 +5,7 @@ import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
-import { initKeycloak, fetchConfig } from "@/lib/keycloak";
+import { initKeycloak, fetchConfig, getKeycloakToken, getConfig } from "@/lib/keycloak";
 import NotFound from "@/pages/not-found";
 import Landing from "@/pages/landing";
 import Login from "@/pages/login";
@@ -23,6 +23,8 @@ import AdminUsers from "@/pages/admin-users";
 
 function Router() {
   const { user, isAuthenticated, isLoading } = useAuth();
+  const token = getKeycloakToken();
+  const provider = getConfig()?.auth.provider || "local";
   
   // Check if authenticated user has a tenant
   const { data: tenant, isLoading: tenantLoading } = useQuery({
@@ -31,7 +33,11 @@ function Router() {
     retry: false,
   });
 
-  if (isLoading || (isAuthenticated && tenantLoading)) {
+  // For Keycloak: if we have a token but user hasn't loaded yet, keep loading
+  // This prevents showing Landing briefly before user data arrives after F5
+  const waitingForUserWithToken = provider === "keycloak" && !!token && !user;
+
+  if (isLoading || (isAuthenticated && tenantLoading) || waitingForUserWithToken) {
     return (
       <div className="min-h-screen w-full flex items-center justify-center bg-slate-50">
         <div className="text-center">
@@ -43,7 +49,7 @@ function Router() {
   }
 
   // Check if user is super admin
-  const isSuperAdmin = user?.role === "super-admin";
+  const isSuperAdmin = (user as any)?.role === "super-admin";
 
   return (
     <Switch>
@@ -51,6 +57,8 @@ function Router() {
         <>
           <Route path="/login" component={Login} />
           <Route path="/" component={Landing} />
+          {/* Fallback for unauthenticated: render Landing instead of 404 */}
+          <Route component={Landing} />
         </>
       ) : isSuperAdmin ? (
         <>
@@ -72,37 +80,36 @@ function Router() {
           <Route path="/costs" component={Costs} />
         </>
       )}
-      <Route component={NotFound} />
+      {/* Fallback for authenticated users: keep NotFound */}
+      {isAuthenticated && <Route component={NotFound} />}
     </Switch>
   );
 }
 
 function App() {
-  const [configLoaded, setConfigLoaded] = useState(false);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    // Only fetch config initially (non-blocking)
-    async function loadConfig() {
+    async function init() {
       try {
         const cfg = await fetchConfig();
-        setConfigLoaded(true);
         
-        // Initialize Keycloak in background (non-blocking for public pages)
         if (cfg.auth.provider === "keycloak") {
-          initKeycloak().catch(error => {
-            console.error("Keycloak initialization failed:", error);
-          });
+          // Init Keycloak in background without blocking
+          initKeycloak().finally(() => setReady(true));
+        } else {
+          setReady(true);
         }
       } catch (error) {
-        console.error("Failed to load config:", error);
-        setConfigLoaded(true);
+        console.error("Failed to init:", error);
+        setReady(true);
       }
     }
-    loadConfig();
+    init();
   }, []);
 
-  // Don't block on Keycloak init - just wait for config
-  if (!configLoaded) {
+  // Only block while fetching config (very fast)
+  if (!ready) {
     return (
       <div className="min-h-screen w-full flex items-center justify-center bg-slate-50">
         <div className="text-center">

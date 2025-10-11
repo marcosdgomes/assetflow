@@ -46,6 +46,7 @@ export async function initKeycloak(): Promise<Keycloak | null> {
   });
 
   try {
+    // Initialize Keycloak with standard flow (no silent-check-sso iframe)
     const authenticated = await keycloak.init({
       onLoad: "check-sso",
       checkLoginIframe: false,
@@ -60,6 +61,19 @@ export async function initKeycloak(): Promise<Keycloak | null> {
       hasToken: !!keycloak.token,
       email: keycloak.tokenParsed?.email,
     });
+
+    // Clean up URL hash if there's a Keycloak error (prevents #error=login_required flash)
+    // BUT preserve callback parameters (state, code, session_state) needed for auth
+    if (window.location.hash && window.location.hash.includes("error=")) {
+      const hasCallbackParams = window.location.hash.includes("state=") || 
+                               window.location.hash.includes("code=");
+      
+      // Only clean if it's an error WITHOUT callback params
+      if (!hasCallbackParams) {
+        console.log("🧹 Cleaning Keycloak error from URL");
+        window.history.replaceState(null, "", window.location.pathname + window.location.search);
+      }
+    }
 
     if (authenticated) {
       console.log("✅ User authenticated via Keycloak");
@@ -80,6 +94,17 @@ export async function initKeycloak(): Promise<Keycloak | null> {
     return keycloak;
   } catch (error) {
     console.error("❌ Keycloak init failed:", error);
+    // Clean up URL hash on error too
+    // BUT preserve callback parameters (state, code, session_state) needed for auth
+    if (window.location.hash && window.location.hash.includes("error=")) {
+      const hasCallbackParams = window.location.hash.includes("state=") || 
+                               window.location.hash.includes("code=");
+      
+      // Only clean if it's an error WITHOUT callback params
+      if (!hasCallbackParams) {
+        window.history.replaceState(null, "", window.location.pathname + window.location.search);
+      }
+    }
     return null;
   }
 }
@@ -90,6 +115,27 @@ export function getKeycloak(): Keycloak | null {
 
 export function isKeycloakAuthenticated(): boolean {
   return keycloak?.authenticated === true;
+}
+
+export function isKeycloakFullyReady(): boolean {
+  const cfg = getConfig();
+  
+  // If using Keycloak as auth provider
+  if (cfg?.auth.provider === "keycloak") {
+    // Must have keycloak initialized
+    if (!keycloak) return false; // Still initializing, wait
+    
+    // If authenticated, must have token
+    if (keycloak.authenticated) {
+      return !!keycloak.token;
+    }
+    
+    // Not authenticated is OK (will show public pages)
+    return true;
+  }
+  
+  // Not using Keycloak (local auth)
+  return true;
 }
 
 export async function keycloakLogin() {
