@@ -19,6 +19,7 @@ import Dependencies from "@/pages/dependencies";
 import Costs from "@/pages/costs";
 import AdminDashboard from "@/pages/admin-dashboard";
 import AdminTenantDetail from "@/pages/admin-tenant-detail";
+import AdminUsers from "@/pages/admin-users";
 
 function Router() {
   const { user, isAuthenticated, isLoading } = useAuth();
@@ -55,6 +56,7 @@ function Router() {
         <>
           <Route path="/" component={AdminDashboard} />
           <Route path="/admin" component={AdminDashboard} />
+          <Route path="/admin/users" component={AdminUsers} />
           <Route path="/admin/tenants/:id" component={AdminTenantDetail} />
         </>
       ) : !tenant ? (

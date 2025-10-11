@@ -57,6 +57,7 @@ export interface IStorage {
   getAllUsers(): Promise<(User & { tenants?: (UserTenant & { tenant: Tenant })[] })[]>;
   createUser(user: InsertUser): Promise<User>;
   updateUserRole(userId: string, role: string): Promise<User | undefined>;
+  deleteUser(userId: string): Promise<boolean>;
   hasSuperAdmin(): Promise<boolean>;
   
   // Tenant operations
@@ -264,6 +265,11 @@ export class DatabaseStorage implements IStorage {
       .where(eq(users.id, userId))
       .returning();
     return user;
+  }
+
+  async deleteUser(userId: string): Promise<boolean> {
+    await db.delete(users).where(eq(users.id, userId));
+    return true;
   }
 
   async hasSuperAdmin(): Promise<boolean> {

@@ -24,7 +24,7 @@ services:
     networks:
       - assetflow-net
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:5000/api/health"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:5002/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3

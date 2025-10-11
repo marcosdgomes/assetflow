@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import passport from "passport";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated as isLocalAuthenticated } from "./replitAuth";
+import { deleteKeycloakUser } from "./keycloakAdmin";
 import {
   insertTenantSchema,
   insertDepartmentSchema,
@@ -163,6 +164,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching users:", error);
       res.status(500).json({ message: "Failed to fetch users" });
+    }
+  });
+
+  app.delete("/api/admin/users/:id", isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const currentUserId = getUserId(req);
+      
+      // Prevent deleting yourself
+      if (id === currentUserId) {
+        return res.status(400).json({ message: "You cannot delete yourself" });
+      }
+      
+      // Get user to be deleted
+      const userToDelete = await storage.getUser(id);
+      if (!userToDelete) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      // If trying to delete a super admin, check if it's the last one
+      if (userToDelete.role === "super-admin") {
+        const allUsers = await storage.getAllUsers();
+        const superAdminCount = allUsers.filter((u: any) => u.role === "super-admin").length;
+        
+        if (superAdminCount <= 1) {
+          return res.status(400).json({ 
+            message: "Cannot delete the last super admin. The system must have at least one super admin to manage the platform." 
+          });
+        }
+      }
+      
+      // Delete from Keycloak if using Keycloak auth
+      if (process.env.AUTH_PROVIDER === "keycloak") {
+        try {
+          await deleteKeycloakUser(id);
+          console.log(`✅ User ${id} deleted from Keycloak`);
+        } catch (error: any) {
+          console.warn(`⚠️ Failed to delete user from Keycloak: ${error.message}`);
+          // Continue with local deletion even if Keycloak fails
+        }
+      }
+      
+      // Delete from local database
+      await storage.deleteUser(id);
+      console.log(`✅ User ${id} deleted from database`);
+      
+      res.json({ message: "User deleted successfully" });
+    } catch (error) {
+      console.error("❌ Error deleting user:", error);
+      const errorMessage = error instanceof Error ? error.message : "Failed to delete user";
+      res.status(500).json({ message: errorMessage });
     }
   });
 

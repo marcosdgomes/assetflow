@@ -17,8 +17,8 @@ const navigationItems = [
   },
   {
     name: "Users",
-    path: "/admin",
-    icon: "fas fa-users",
+    path: "/admin/users",
+    icon: Users,
   },
 ];
 
