@@ -50,11 +50,11 @@ RUN addgroup --system --gid 1001 nodejs && \
 USER assetflow
 
 # Expor porta
-EXPOSE 5000
+EXPOSE 5002
 
 # Variável de ambiente padrão
 ENV NODE_ENV=production
-ENV PORT=5000
+ENV PORT=5002
 
 # Comando de inicialização
 CMD ["node", "dist/index.js"]
