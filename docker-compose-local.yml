@@ -13,8 +13,7 @@ services:
       # Server Configuration
       - PORT=5002
       - NODE_ENV=production
-      - SESSION_SECRET=${SESSION_SECRET}
-      
+      - SESSION_SECRET=${SESSION_SECRET}xd
       # Authentication Provider (local ou keycloak)
       - AUTH_PROVIDER=${AUTH_PROVIDER:-local}
       
