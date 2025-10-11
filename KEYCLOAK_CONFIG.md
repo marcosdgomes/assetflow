@@ -40,7 +40,7 @@ Users → Add User:
   Email: admin@example.com
 
 Credentials:
-  Password: [sua-senha]
+  Password: [your_pwd]
   Temporary: OFF
 
 Role Mappings:
