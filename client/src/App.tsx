@@ -1,9 +1,11 @@
+import { useState, useEffect } from "react";
 import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
+import { initKeycloak, getConfig, isKeycloakAuthenticated } from "@/lib/keycloak";
 import NotFound from "@/pages/not-found";
 import Landing from "@/pages/landing";
 import Login from "@/pages/login";
@@ -74,6 +76,36 @@ function Router() {
 }
 
 function App() {
+  const [keycloakInitialized, setKeycloakInitialized] = useState(false);
+  const [authProvider, setAuthProvider] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function initialize() {
+      try {
+        await initKeycloak();
+        const config = getConfig();
+        setAuthProvider(config?.auth.provider || "local");
+        setKeycloakInitialized(true);
+      } catch (error) {
+        console.error("Failed to initialize auth:", error);
+        setAuthProvider("local");
+        setKeycloakInitialized(true);
+      }
+    }
+    initialize();
+  }, []);
+
+  if (!keycloakInitialized) {
+    return (
+      <div className="min-h-screen w-full flex items-center justify-center bg-slate-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto"></div>
+          <p className="mt-2 text-slate-600">Initializing...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>

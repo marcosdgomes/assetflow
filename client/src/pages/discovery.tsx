@@ -116,7 +116,7 @@ export default function Discovery() {
 
   const createAgentMutation = useMutation({
     mutationFn: async (data: AgentFormData) => {
-      await apiRequest("/api/discovery/agents", "POST", data);
+      await apiRequest("POST", "/api/discovery/agents", data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/discovery/agents"] });
@@ -149,7 +149,7 @@ export default function Discovery() {
 
   const runAgentMutation = useMutation({
     mutationFn: async (agentId: string) => {
-      await apiRequest(`/api/discovery/agents/${agentId}/run`, "POST");
+      await apiRequest("POST", `/api/discovery/agents/${agentId}/run`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/discovery/sessions"] });
@@ -180,7 +180,7 @@ export default function Discovery() {
 
   const approveMutation = useMutation({
     mutationFn: async (id: string) => {
-      await apiRequest(`/api/discovery/discovered/${id}/approve`, "POST");
+      await apiRequest("POST", `/api/discovery/discovered/${id}/approve`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/discovery/discovered"] });
@@ -211,7 +211,7 @@ export default function Discovery() {
 
   const rejectMutation = useMutation({
     mutationFn: async (id: string) => {
-      await apiRequest(`/api/discovery/discovered/${id}/reject`, "POST");
+      await apiRequest("POST", `/api/discovery/discovered/${id}/reject`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/discovery/discovered"] });

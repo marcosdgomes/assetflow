@@ -1,18 +1,39 @@
-import { useState } from "react";
-import { useLocation } from "wouter";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Package } from "lucide-react";
+import { getConfig, keycloakLogin } from "@/lib/keycloak";
 
 export default function Login() {
-  const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [authProvider, setAuthProvider] = useState<string>("local");
+
+  useEffect(() => {
+    const config = getConfig();
+    if (config) {
+      setAuthProvider(config.auth.provider);
+    }
+  }, []);
+
+  const handleKeycloakLogin = async () => {
+    setLoading(true);
+    try {
+      await keycloakLogin();
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Login failed",
+        description: "Failed to redirect to Keycloak",
+      });
+      setLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,6 +45,7 @@ export default function Login() {
         headers: {
           "Content-Type": "application/json",
         },
+        credentials: "include", // Important for cookies
         body: JSON.stringify({ username, password }),
       });
 
@@ -36,8 +58,8 @@ export default function Login() {
         description: "Welcome back!",
       });
 
-      // Redirect to home page
-      setLocation("/");
+      // Force full page reload to refresh auth state
+      window.location.href = "/";
     } catch (error) {
       toast({
         variant: "destructive",
@@ -64,54 +86,58 @@ export default function Login() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="username">Username</Label>
-              <Input
-                id="username"
-                type="text"
-                placeholder="admin"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                required
-                data-testid="input-username"
-              />
+          {authProvider === "keycloak" ? (
+            <div className="space-y-4">
+              <Button
+                onClick={handleKeycloakLogin}
+                className="w-full"
+                disabled={loading}
+                data-testid="button-keycloak-login"
+              >
+                {loading ? "Redirecting..." : "Sign in with Keycloak"}
+              </Button>
+              <p className="text-sm text-center text-muted-foreground">
+                You will be redirected to Keycloak to sign in
+              </p>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                data-testid="input-password"
-              />
-            </div>
-            <Button
-              type="submit"
-              className="w-full"
-              disabled={loading}
-              data-testid="button-login"
-            >
-              {loading ? "Signing in..." : "Sign in"}
-            </Button>
-          </form>
-          
-          <div className="mt-6 text-center">
-            <p className="text-sm text-muted-foreground">
-              Or continue with
-            </p>
-            <Button
-              variant="outline"
-              className="w-full mt-2"
-              onClick={() => window.location.href = "/api/login"}
-              data-testid="button-replit-auth"
-            >
-              Sign in with Replit
-            </Button>
-          </div>
+          ) : (
+            <>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="username">Username</Label>
+                  <Input
+                    id="username"
+                    type="text"
+                    placeholder="admin"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    required
+                    data-testid="input-username"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="password">Password</Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    data-testid="input-password"
+                  />
+                </div>
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={loading}
+                  data-testid="button-login"
+                >
+                  {loading ? "Signing in..." : "Sign in"}
+                </Button>
+              </form>
+            </>
+          )}
         </CardContent>
       </Card>
     </div>

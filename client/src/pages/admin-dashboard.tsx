@@ -21,7 +21,9 @@ const createTenantSchema = z.object({
     slug: z.string().min(1, "Slug is required").regex(/^[a-z0-9-]+$/, "Slug must be lowercase alphanumeric with hyphens"),
   }),
   adminUser: z.object({
+    username: z.string().min(3, "Username must be at least 3 characters"),
     email: z.string().email("Invalid email"),
+    password: z.string().min(6, "Password must be at least 6 characters"),
     firstName: z.string().min(1, "First name is required"),
     lastName: z.string().min(1, "Last name is required"),
     role: z.literal("user").default("user"),
@@ -52,7 +54,9 @@ export default function AdminDashboard() {
         slug: "",
       },
       adminUser: {
+        username: "",
         email: "",
+        password: "",
         firstName: "",
         lastName: "",
         role: "user",
@@ -253,6 +257,24 @@ export default function AdminDashboard() {
                 
                 <FormField
                   control={form.control}
+                  name="adminUser.username"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Username</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          placeholder="admin"
+                          data-testid="input-admin-username"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
                   name="adminUser.email"
                   render={({ field }) => (
                     <FormItem>
@@ -263,6 +285,25 @@ export default function AdminDashboard() {
                           type="email"
                           placeholder="admin@example.com"
                           data-testid="input-admin-email"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="adminUser.password"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Password</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          type="password"
+                          placeholder="••••••••"
+                          data-testid="input-admin-password"
                         />
                       </FormControl>
                       <FormMessage />

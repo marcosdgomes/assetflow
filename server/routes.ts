@@ -1,7 +1,8 @@
-import type { Express } from "express";
+import type { Express, RequestHandler } from "express";
 import { createServer, type Server } from "http";
+import passport from "passport";
 import { storage } from "./storage";
-import { setupAuth, isAuthenticated } from "./replitAuth";
+import { setupAuth, isAuthenticated as isLocalAuthenticated } from "./replitAuth";
 import {
   insertTenantSchema,
   insertDepartmentSchema,
@@ -19,10 +20,22 @@ import {
 import { z } from "zod";
 import { fromZodError } from "zod-validation-error";
 
+// Helper function to get user ID from both local and OIDC auth
+function getUserId(req: any): string {
+  if (req.user?.authType === 'keycloak') {
+    return req.user.id;
+  }
+  return req.user?.authType === 'local' ? req.user.id : req.user?.claims?.sub;
+}
+
+// Dynamic authentication middleware based on AUTH_PROVIDER
+let isAuthenticated: RequestHandler;
+let keycloakAuthMiddleware: RequestHandler | null = null;
+
 // Super Admin middleware
 const isSuperAdmin = async (req: any, res: any, next: any) => {
   try {
-    const userId = req.user?.claims?.sub;
+    const userId = getUserId(req);
     if (!userId) {
       return res.status(401).json({ message: "Unauthorized" });
     }
@@ -40,13 +53,65 @@ const isSuperAdmin = async (req: any, res: any, next: any) => {
 };
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Auth middleware
-  await setupAuth(app);
+  // Public config endpoint (no auth required)
+  app.get("/api/config", (req, res) => {
+    const authProvider = process.env.AUTH_PROVIDER || "local";
+    
+    const config: any = {
+      auth: {
+        provider: authProvider,
+      },
+    };
+
+    // Add Keycloak config if using Keycloak
+    if (authProvider === "keycloak") {
+      config.auth.keycloak = {
+        url: process.env.KEYCLOAK_URL,
+        realm: process.env.KEYCLOAK_REALM,
+        clientId: process.env.KEYCLOAK_CLIENT_ID,
+      };
+    }
+
+    res.json(config);
+  });
+
+  // Setup authentication based on provider
+  const authProvider = process.env.AUTH_PROVIDER || "local";
+  
+  if (authProvider === "keycloak") {
+    const { setupKeycloakAuth, isKeycloakAuthenticated } = await import("./keycloakAuth");
+    await setupKeycloakAuth(app);
+    isAuthenticated = isKeycloakAuthenticated;
+    keycloakAuthMiddleware = isKeycloakAuthenticated;
+    console.log("✅ Using Keycloak authentication");
+  } else {
+    await setupAuth(app);
+    isAuthenticated = isLocalAuthenticated;
+    console.log("✅ Using Local authentication");
+  }
+
+  // Local auth route
+  app.post("/api/auth/local", async (req: any, res, next) => {
+    passport.authenticate("local", (err: any, user: any, info: any) => {
+      if (err) {
+        return next(err);
+      }
+      if (!user) {
+        return res.status(401).json({ message: info?.message || "Invalid credentials" });
+      }
+      req.logIn(user, (err: any) => {
+        if (err) {
+          return next(err);
+        }
+        return res.json(user);
+      });
+    })(req, res, next);
+  });
 
   // Auth routes
   app.get("/api/auth/user", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = getUserId(req);
       const user = await storage.getUser(userId);
       const tenant = await storage.getTenantByUserId(userId);
       
@@ -60,7 +125,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Promote to super admin (only if no super admin exists - self-promotion for first user only)
   app.post("/api/auth/promote-to-super-admin", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = getUserId(req);
       
       // Check if a super admin already exists
       const hasSuperAdmin = await storage.hasSuperAdmin();
@@ -110,7 +175,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const { role } = req.body;
-      const superAdminId = req.user.claims.sub;
+      const superAdminId = getUserId(req);
       
       if (!role || !["user", "super-admin"].includes(role)) {
         return res.status(400).json({ message: "Invalid role. Must be 'user' or 'super-admin'" });
@@ -150,7 +215,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/admin/tenants", isAuthenticated, isSuperAdmin, async (req: any, res) => {
     try {
       const { tenant, adminUser } = req.body;
-      const superAdminId = req.user.claims.sub;
+      const superAdminId = getUserId(req);
       
       const validatedTenant = insertTenantSchema.parse(tenant);
       const validatedUser = insertUserSchema.parse(adminUser);
@@ -158,6 +223,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Ensure the user being created has regular user role (not super-admin)
       if (validatedUser.role === "super-admin") {
         return res.status(400).json({ message: "Cannot create super admin through tenant creation" });
+      }
+      
+      // Check if slug already exists
+      const existingTenant = await storage.getTenantBySlug(validatedTenant.slug);
+      if (existingTenant) {
+        return res.status(400).json({ 
+          message: `Tenant with slug "${validatedTenant.slug}" already exists. Please choose a different name.`,
+          field: "slug"
+        });
+      }
+      
+      // Check if email already exists
+      if (validatedUser.email) {
+        const existingEmail = await storage.getUserByEmail(validatedUser.email);
+        if (existingEmail) {
+          return res.status(400).json({ 
+            message: `A user with email "${validatedUser.email}" already exists.`,
+            field: "email"
+          });
+        }
+      }
+      
+      // Check if username already exists
+      if (validatedUser.username) {
+        const existingUsername = await storage.getUserByUsername(validatedUser.username);
+        if (existingUsername) {
+          return res.status(400).json({ 
+            message: `Username "${validatedUser.username}" is already taken.`,
+            field: "username"
+          });
+        }
       }
       
       // Create user first
@@ -174,6 +270,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: fromZodError(error).message });
       }
+      
+      // Handle database constraint errors
+      if ((error as any).code === '23505') {
+        const constraintName = (error as any).constraint;
+        if (constraintName === 'tenants_slug_unique') {
+          return res.status(400).json({ 
+            message: "A tenant with this slug already exists. Please choose a different name.",
+            field: "slug"
+          });
+        }
+        if (constraintName === 'users_email_unique') {
+          return res.status(400).json({ 
+            message: "A user with this email already exists.",
+            field: "email"
+          });
+        }
+        if (constraintName === 'users_username_unique') {
+          return res.status(400).json({ 
+            message: "This username is already taken.",
+            field: "username"
+          });
+        }
+      }
+      
       console.error("Error creating tenant:", error);
       res.status(500).json({ message: "Failed to create tenant" });
     }
@@ -291,7 +411,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/tenants", isAuthenticated, async (req: any, res) => {
     try {
       const validatedData = insertTenantSchema.parse(req.body);
-      const userId = req.user.claims.sub;
+      const userId = getUserId(req);
+      
+      // Check if slug already exists
+      const existingTenant = await storage.getTenantBySlug(validatedData.slug);
+      if (existingTenant) {
+        return res.status(400).json({ 
+          message: `A workspace with this name already exists. Please choose a different name.`,
+          field: "slug"
+        });
+      }
+      
       const tenant = await storage.createTenant(validatedData, userId);
       
       await storage.createActivity({
@@ -308,6 +438,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: fromZodError(error).message });
       }
+      
+      // Handle database constraint errors
+      if ((error as any).code === '23505' && (error as any).constraint === 'tenants_slug_unique') {
+        return res.status(400).json({ 
+          message: "A workspace with this name already exists. Please choose a different name.",
+          field: "slug"
+        });
+      }
+      
       console.error("Error creating tenant:", error);
       res.status(500).json({ message: "Failed to create tenant" });
     }
@@ -316,7 +455,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get current tenant
   app.get("/api/tenant", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = getUserId(req);
       const tenant = await storage.getTenantByUserId(userId);
       
       if (!tenant) {
@@ -333,7 +472,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Department routes
   app.get("/api/departments", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = getUserId(req);
       const tenant = await storage.getTenantByUserId(userId);
       
       if (!tenant) {
@@ -350,7 +489,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/departments", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = getUserId(req);
       const tenant = await storage.getTenantByUserId(userId);
       
       if (!tenant) {
@@ -386,7 +525,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Update department
   app.put("/api/departments/:id", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = getUserId(req);
       const tenant = await storage.getTenantByUserId(userId);
       const departmentId = req.params.id;
       
@@ -425,7 +564,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Delete department
   app.delete("/api/departments/:id", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = getUserId(req);
       const tenant = await storage.getTenantByUserId(userId);
       const departmentId = req.params.id;
       
@@ -460,7 +599,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Environment routes
   app.get("/api/environments", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = getUserId(req);
       const tenant = await storage.getTenantByUserId(userId);
       
       if (!tenant) {
@@ -477,7 +616,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/environments", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = getUserId(req);
       const tenant = await storage.getTenantByUserId(userId);
       
       if (!tenant) {
@@ -513,7 +652,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/environments/:id", isAuthenticated, async (req: any, res) => {
     try {
       const { id } = req.params;
-      const userId = req.user.claims.sub;
+      const userId = getUserId(req);
       const tenant = await storage.getTenantByUserId(userId);
       
       if (!tenant) {
@@ -549,7 +688,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Software Asset routes
   app.get("/api/software", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = getUserId(req);
       const tenant = await storage.getTenantByUserId(userId);
       
       if (!tenant) {
@@ -566,7 +705,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/software", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = getUserId(req);
       const tenant = await storage.getTenantByUserId(userId);
       
       if (!tenant) {
@@ -622,7 +761,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/software/:id", isAuthenticated, async (req: any, res) => {
     try {
       const { id } = req.params;
-      const userId = req.user.claims.sub;
+      const userId = getUserId(req);
       const tenant = await storage.getTenantByUserId(userId);
       
       if (!tenant) {
@@ -658,7 +797,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Cost tracking routes
   app.get("/api/costs", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = getUserId(req);
       const tenant = await storage.getTenantByUserId(userId);
       
       if (!tenant) {
@@ -676,7 +815,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Dependency routes
   app.get("/api/dependencies", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = getUserId(req);
       const tenant = await storage.getTenantByUserId(userId);
       
       if (!tenant) {
@@ -693,7 +832,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/dependencies", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = getUserId(req);
       const tenant = await storage.getTenantByUserId(userId);
       
       if (!tenant) {
@@ -725,7 +864,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Environment-Software relationships
   app.get("/api/environment-software", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = getUserId(req);
       const tenant = await storage.getTenantByUserId(userId);
       
       if (!tenant) {
@@ -743,7 +882,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Dashboard stats
   app.get("/api/dashboard/stats", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = getUserId(req);
       const tenant = await storage.getTenantByUserId(userId);
       
       if (!tenant) {
@@ -761,7 +900,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Activity feed
   app.get("/api/activities", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = getUserId(req);
       const tenant = await storage.getTenantByUserId(userId);
       
       if (!tenant) {
@@ -780,7 +919,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Discovery Agent Routes
   app.get("/api/discovery/agents", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = getUserId(req);
       const tenant = await storage.getTenantByUserId(userId);
       
       if (!tenant) {
@@ -797,7 +936,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/discovery/agents", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = getUserId(req);
       const tenant = await storage.getTenantByUserId(userId);
       
       if (!tenant) {
@@ -829,7 +968,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/discovery/agents/:id/run", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = getUserId(req);
       const tenant = await storage.getTenantByUserId(userId);
       const agentId = req.params.id;
       
@@ -848,7 +987,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Discovery Sessions Routes
   app.get("/api/discovery/sessions", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = getUserId(req);
       const tenant = await storage.getTenantByUserId(userId);
       
       if (!tenant) {
@@ -866,7 +1005,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Discovered Software Routes
   app.get("/api/discovery/discovered", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = getUserId(req);
       const tenant = await storage.getTenantByUserId(userId);
       
       if (!tenant) {
@@ -884,7 +1023,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/discovery/discovered/:id/approve", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = getUserId(req);
       const tenant = await storage.getTenantByUserId(userId);
       const discoveredId = req.params.id;
       
@@ -902,7 +1041,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/discovery/discovered/:id/reject", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = getUserId(req);
       const tenant = await storage.getTenantByUserId(userId);
       const discoveredId = req.params.id;
       

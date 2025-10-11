@@ -68,7 +68,7 @@ export default function AdminTenantDetail() {
 
   const addUserMutation = useMutation({
     mutationFn: async (data: AddUserFormData) => {
-      await apiRequest(`/api/admin/tenants/${tenantId}/users`, "POST", data);
+      await apiRequest("POST", `/api/admin/tenants/${tenantId}/users`, data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/tenants", tenantId, "users"] });
@@ -90,7 +90,7 @@ export default function AdminTenantDetail() {
 
   const removeUserMutation = useMutation({
     mutationFn: async (userId: string) => {
-      await apiRequest(`/api/admin/tenants/${tenantId}/users/${userId}`, "DELETE");
+      await apiRequest("DELETE", `/api/admin/tenants/${tenantId}/users/${userId}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/tenants", tenantId, "users"] });
@@ -111,7 +111,7 @@ export default function AdminTenantDetail() {
 
   const updateRoleMutation = useMutation({
     mutationFn: async ({ userId, role }: { userId: string; role: string }) => {
-      await apiRequest(`/api/admin/tenants/${tenantId}/users/${userId}/role`, "PATCH", { role });
+      await apiRequest("PATCH", `/api/admin/tenants/${tenantId}/users/${userId}/role`, { role });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/tenants", tenantId, "users"] });
@@ -131,7 +131,7 @@ export default function AdminTenantDetail() {
 
   const deleteTenantMutation = useMutation({
     mutationFn: async () => {
-      await apiRequest(`/api/admin/tenants/${tenantId}`, "DELETE");
+      await apiRequest("DELETE", `/api/admin/tenants/${tenantId}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/tenants"] });

@@ -42,12 +42,14 @@ import {
   type InsertUserTenant,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, count } from "drizzle-orm";
+import bcrypt from "bcrypt";
 
 export interface IStorage {
   // User operations (required for Replit Auth)
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
   
   // Super Admin - User operations
@@ -63,6 +65,7 @@ export interface IStorage {
   // Super Admin - Tenant operations
   getAllTenants(): Promise<(Tenant & { userCount?: number })[]>;
   getTenantById(tenantId: string): Promise<Tenant | undefined>;
+  getTenantBySlug(slug: string): Promise<Tenant | undefined>;
   updateTenant(tenantId: string, updates: Partial<InsertTenant>): Promise<Tenant | undefined>;
   deleteTenant(tenantId: string): Promise<boolean>;
   
@@ -150,6 +153,11 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.email, email));
+    return user;
+  }
+
   async upsertUser(userData: UpsertUser): Promise<User> {
     // First try to find existing user by ID or email
     const existing = await db
@@ -205,6 +213,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createUser(userData: InsertUser): Promise<User> {
+    // Hash password if provided
+    if (userData.password) {
+      userData.password = await bcrypt.hash(userData.password, 10);
+    }
+    
     const [user] = await db.insert(users).values(userData).returning();
     return user;
   }
@@ -258,14 +271,14 @@ export class DatabaseStorage implements IStorage {
     
     const tenantsWithCounts = await Promise.all(
       allTenants.map(async (tenant) => {
-        const [count] = await db
-          .select({ count: db.$count(userTenants.id) })
+        const [result] = await db
+          .select({ count: count() })
           .from(userTenants)
           .where(eq(userTenants.tenantId, tenant.id));
         
         return {
           ...tenant,
-          userCount: Number(count?.count || 0),
+          userCount: Number(result?.count || 0),
         };
       })
     );
@@ -275,6 +288,11 @@ export class DatabaseStorage implements IStorage {
 
   async getTenantById(tenantId: string): Promise<Tenant | undefined> {
     const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId));
+    return tenant;
+  }
+
+  async getTenantBySlug(slug: string): Promise<Tenant | undefined> {
+    const [tenant] = await db.select().from(tenants).where(eq(tenants.slug, slug));
     return tenant;
   }
 
