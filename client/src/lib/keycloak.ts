@@ -13,17 +13,19 @@ interface AppConfig {
 
 let keycloak: Keycloak | null = null;
 let config: AppConfig | null = null;
+let configCache: AppConfig | null = null;
 
 export async function fetchConfig(): Promise<AppConfig> {
-  if (config) return config;
+  if (configCache) return configCache;
   
   const response = await fetch("/api/config");
-  config = await response.json();
-  return config!;
+  configCache = await response.json();
+  config = configCache; // Keep backward compatibility
+  return configCache!;
 }
 
 export function getConfig(): AppConfig | null {
-  return config;
+  return configCache || config;
 }
 
 export async function initKeycloak(): Promise<Keycloak | null> {

@@ -74,7 +74,7 @@ export default function Sidebar() {
               Assets Manager
             </h1>
             <p className="text-xs text-slate-500">
-              Skalena RNC
+              {tenant?.name || "Loading..."}
             </p>
           </div>
         </div>
