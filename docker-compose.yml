@@ -1,6 +1,6 @@
 services:
   assetflow:
-    image: ghcr.io/marcosdelano/assetflow:latest
+    image: ghcr.io/marcosdgomes/assetflow:latest
     container_name: assetflow
     restart: unless-stopped
     ports:
