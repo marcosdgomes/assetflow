@@ -1,0 +1,36 @@
+services:
+  assetflow:
+    build: .
+    image: assetflow:local
+    container_name: assetflow
+    restart: unless-stopped
+    ports:
+      - "5002:5002"
+    environment:
+      # Database
+      - DATABASE_URL=${DATABASE_URL}
+      
+      # Server Configuration
+      - PORT=5002
+      - NODE_ENV=production
+      - SESSION_SECRET=${SESSION_SECRET}
+      
+      # Authentication Provider (local ou keycloak)
+      - AUTH_PROVIDER=${AUTH_PROVIDER:-local}
+      
+      - KEYCLOAK_REALM=${KEYCLOAK_REALM}
+      - KEYCLOAK_URL=${KEYCLOAK_URL}
+      - KEYCLOAK_CLIENT_ID=${KEYCLOAK_CLIENT_ID}
+      - KEYCLOAK_CLIENT_SECRET=${KEYCLOAK_CLIENT_SECRET}
+    networks:
+      - assetflow-net
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:5000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  assetflow-net:
+    driver: bridge

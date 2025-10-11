@@ -5,6 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -15,6 +16,8 @@ import { z } from "zod";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { ArrowLeft, Plus, Trash2, Shield } from "lucide-react";
 import { Link } from "wouter";
+import AdminSidebar from "@/components/layout/admin-sidebar";
+import Header from "@/components/layout/header";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,7 +34,17 @@ const addUserSchema = z.object({
   role: z.enum(["admin", "user"]),
 });
 
+const createUserSchema = z.object({
+  username: z.string().min(3, "Username must be at least 3 characters"),
+  email: z.string().email("Invalid email"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+  firstName: z.string().min(1, "First name is required"),
+  lastName: z.string().min(1, "Last name is required"),
+  role: z.enum(["admin", "user"]),
+});
+
 type AddUserFormData = z.infer<typeof addUserSchema>;
+type CreateUserFormData = z.infer<typeof createUserSchema>;
 
 export default function AdminTenantDetail() {
   const [, params] = useRoute("/admin/tenants/:id");
@@ -39,29 +52,42 @@ export default function AdminTenantDetail() {
   const tenantId = params?.id;
   const [showAddUserModal, setShowAddUserModal] = useState(false);
   const [userToRemove, setUserToRemove] = useState<string | null>(null);
+  const [showDeleteTenantDialog, setShowDeleteTenantDialog] = useState(false);
   const { toast } = useToast();
 
-  const { data: tenant, isLoading: tenantLoading } = useQuery({
+  const { data: tenant, isLoading: tenantLoading } = useQuery<any>({
     queryKey: ["/api/admin/tenants", tenantId],
     enabled: !!tenantId,
     retry: false,
   });
 
-  const { data: tenantUsers = [], isLoading: usersLoading } = useQuery({
+  const { data: tenantUsers = [], isLoading: usersLoading } = useQuery<any[]>({
     queryKey: ["/api/admin/tenants", tenantId, "users"],
     enabled: !!tenantId,
     retry: false,
   });
 
-  const { data: allUsers = [] } = useQuery({
+  const { data: allUsers = [] } = useQuery<any[]>({
     queryKey: ["/api/admin/users"],
     retry: false,
   });
 
-  const form = useForm<AddUserFormData>({
+  const addUserForm = useForm<AddUserFormData>({
     resolver: zodResolver(addUserSchema),
     defaultValues: {
       userId: "",
+      role: "user",
+    },
+  });
+
+  const createUserForm = useForm<CreateUserFormData>({
+    resolver: zodResolver(createUserSchema),
+    defaultValues: {
+      username: "",
+      email: "",
+      password: "",
+      firstName: "",
+      lastName: "",
       role: "user",
     },
   });
@@ -72,8 +98,9 @@ export default function AdminTenantDetail() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/tenants", tenantId, "users"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
       setShowAddUserModal(false);
-      form.reset();
+      addUserForm.reset();
       toast({
         title: "Success",
         description: "User added to tenant successfully",
@@ -83,6 +110,46 @@ export default function AdminTenantDetail() {
       toast({
         title: "Error",
         description: error.message || "Failed to add user to tenant",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const createAndAddUserMutation = useMutation({
+    mutationFn: async (data: CreateUserFormData) => {
+      // Create user first
+      const response = await apiRequest("POST", "/api/admin/users", {
+        username: data.username,
+        email: data.email,
+        password: data.password,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        role: "user", // Always create as regular user
+      });
+      const newUser = await response.json();
+      
+      // Then add to tenant
+      await apiRequest("POST", `/api/admin/tenants/${tenantId}/users`, {
+        userId: newUser.id,
+        role: data.role,
+      });
+      
+      return newUser;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/tenants", tenantId, "users"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      setShowAddUserModal(false);
+      createUserForm.reset();
+      toast({
+        title: "Success",
+        description: "User created and added to tenant successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create user",
         variant: "destructive",
       });
     },
@@ -150,8 +217,12 @@ export default function AdminTenantDetail() {
     },
   });
 
-  const handleSubmit = (data: AddUserFormData) => {
+  const handleAddExistingUser = (data: AddUserFormData) => {
     addUserMutation.mutate(data);
+  };
+
+  const handleCreateNewUser = (data: CreateUserFormData) => {
+    createAndAddUserMutation.mutate(data);
   };
 
   const handleRemoveUser = () => {
@@ -170,30 +241,44 @@ export default function AdminTenantDetail() {
   }
 
   return (
-    <div className="space-y-6" data-testid="admin-tenant-detail">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Link href="/admin">
-            <Button variant="outline" size="icon" data-testid="button-back">
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-          </Link>
-          <div>
-            <h1 className="text-3xl font-bold" data-testid="page-title">
-              {tenantLoading ? "Loading..." : tenant?.name || "Tenant Details"}
-            </h1>
-            <p className="text-muted-foreground" data-testid="page-description">
-              {tenantLoading ? "" : `Manage users and settings for ${tenant?.slug}`}
-            </p>
+    <div className="flex h-screen overflow-hidden bg-slate-50">
+      <AdminSidebar />
+      
+      <main className="flex flex-col flex-1 overflow-hidden">
+        <Header 
+          title={tenantLoading ? "Loading..." : tenant?.name || "Tenant Details"}
+          description={tenantLoading ? "" : `Manage users and settings for ${tenant?.slug}`}
+        />
+        
+        <div className="flex-1 overflow-y-auto p-6" data-testid="admin-tenant-detail">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-4">
+              <Link href="/admin">
+                <Button variant="outline" size="icon" data-testid="button-back">
+                  <ArrowLeft className="h-4 w-4" />
+                </Button>
+              </Link>
+              <div>
+                <h2 className="text-2xl font-bold" data-testid="page-title">Tenant Management</h2>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={() => setShowAddUserModal(true)} data-testid="button-add-user">
+                <Plus className="mr-2 h-4 w-4" />
+                Add User
+              </Button>
+              <Button 
+                variant="destructive" 
+                onClick={() => setShowDeleteTenantDialog(true)}
+                data-testid="button-delete-tenant"
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete Tenant
+              </Button>
+            </div>
           </div>
-        </div>
-        <div className="flex gap-2">
-          <Button onClick={() => setShowAddUserModal(true)} data-testid="button-add-user">
-            <Plus className="mr-2 h-4 w-4" />
-            Add User
-          </Button>
-        </div>
-      </div>
+
+          <div className="space-y-6">
 
       <Card data-testid="card-tenant-info">
         <CardHeader>
@@ -300,74 +385,203 @@ export default function AdminTenantDetail() {
             </DialogDescription>
           </DialogHeader>
 
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
-              <FormField
-                control={form.control}
-                name="userId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>User</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger data-testid="select-user">
-                          <SelectValue placeholder="Select a user" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {availableUsers.map((user: any) => (
-                          <SelectItem key={user.id} value={user.id}>
-                            {user.email} - {user.firstName} {user.lastName}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+          <Tabs defaultValue="existing" className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="existing">Existing User</TabsTrigger>
+              <TabsTrigger value="new">Create New User</TabsTrigger>
+            </TabsList>
 
-              <FormField
-                control={form.control}
-                name="role"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Role</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger data-testid="select-role">
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="admin">Admin</SelectItem>
-                        <SelectItem value="user">User</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+            {/* Tab 1: Add Existing User */}
+            <TabsContent value="existing" className="space-y-4">
+              <Form {...addUserForm}>
+                <form onSubmit={addUserForm.handleSubmit(handleAddExistingUser)} className="space-y-4">
+                  <FormField
+                    control={addUserForm.control}
+                    name="userId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>User</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger data-testid="select-user">
+                              <SelectValue placeholder="Select a user" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {availableUsers.length === 0 ? (
+                              <div className="p-2 text-sm text-muted-foreground">No available users. Create a new user instead.</div>
+                            ) : (
+                              availableUsers.map((user: any) => (
+                                <SelectItem key={user.id} value={user.id}>
+                                  {user.email} - {user.firstName} {user.lastName}
+                                </SelectItem>
+                              ))
+                            )}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-              <DialogFooter>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setShowAddUserModal(false)}
-                  data-testid="button-cancel"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={addUserMutation.isPending}
-                  data-testid="button-submit-user"
-                >
-                  {addUserMutation.isPending ? "Adding..." : "Add User"}
-                </Button>
-              </DialogFooter>
-            </form>
-          </Form>
+                  <FormField
+                    control={addUserForm.control}
+                    name="role"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Tenant Role</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger data-testid="select-role">
+                              <SelectValue />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="admin">Admin</SelectItem>
+                            <SelectItem value="user">User</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <DialogFooter>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setShowAddUserModal(false)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="submit"
+                      disabled={addUserMutation.isPending || availableUsers.length === 0}
+                    >
+                      {addUserMutation.isPending ? "Adding..." : "Add User"}
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </Form>
+            </TabsContent>
+
+            {/* Tab 2: Create New User */}
+            <TabsContent value="new" className="space-y-4">
+              <Form {...createUserForm}>
+                <form onSubmit={createUserForm.handleSubmit(handleCreateNewUser)} className="space-y-4">
+                  <FormField
+                    control={createUserForm.control}
+                    name="username"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Username</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="john.doe" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={createUserForm.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Email</FormLabel>
+                        <FormControl>
+                          <Input {...field} type="email" placeholder="john@example.com" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={createUserForm.control}
+                    name="password"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Password</FormLabel>
+                        <FormControl>
+                          <Input {...field} type="password" placeholder="••••••••" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={createUserForm.control}
+                      name="firstName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>First Name</FormLabel>
+                          <FormControl>
+                            <Input {...field} placeholder="John" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={createUserForm.control}
+                      name="lastName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Last Name</FormLabel>
+                          <FormControl>
+                            <Input {...field} placeholder="Doe" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <FormField
+                    control={createUserForm.control}
+                    name="role"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Tenant Role</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="admin">Admin</SelectItem>
+                            <SelectItem value="user">User</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <DialogFooter>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setShowAddUserModal(false)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="submit"
+                      disabled={createAndAddUserMutation.isPending}
+                    >
+                      {createAndAddUserMutation.isPending ? "Creating..." : "Create & Add User"}
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </Form>
+            </TabsContent>
+          </Tabs>
         </DialogContent>
       </Dialog>
 
@@ -391,6 +605,30 @@ export default function AdminTenantDetail() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Delete Tenant Confirmation */}
+      <AlertDialog open={showDeleteTenantDialog} onOpenChange={setShowDeleteTenantDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Tenant</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this tenant? This will permanently remove the tenant and all associated data including users, software assets, departments, and environments. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteTenantMutation.mutate()}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete Tenant
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+          </div>
+        </div>
+      </main>
     </div>
   );
 }

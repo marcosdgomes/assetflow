@@ -12,8 +12,10 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Building2, Users, Plus, Settings } from "lucide-react";
+import { Building2, Users, Plus, Settings, ChevronLeft, ChevronRight } from "lucide-react";
 import { Link } from "wouter";
+import AdminSidebar from "@/components/layout/admin-sidebar";
+import Header from "@/components/layout/header";
 
 const createTenantSchema = z.object({
   tenant: z.object({
@@ -34,14 +36,16 @@ type CreateTenantFormData = z.infer<typeof createTenantSchema>;
 
 export default function AdminDashboard() {
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
   const { toast } = useToast();
 
-  const { data: tenants = [], isLoading: tenantsLoading } = useQuery({
+  const { data: tenants = [], isLoading: tenantsLoading } = useQuery<any[]>({
     queryKey: ["/api/admin/tenants"],
     retry: false,
   });
 
-  const { data: users = [], isLoading: usersLoading } = useQuery({
+  const { data: users = [], isLoading: usersLoading } = useQuery<any[]>({
     queryKey: ["/api/admin/users"],
     retry: false,
   });
@@ -100,22 +104,34 @@ export default function AdminDashboard() {
     form.setValue("tenant.slug", slug);
   };
 
-  return (
-    <div className="space-y-6" data-testid="admin-dashboard">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold" data-testid="page-title">Super Admin Dashboard</h1>
-          <p className="text-muted-foreground" data-testid="page-description">
-            Manage tenants and users across the platform
-          </p>
-        </div>
-        <Button onClick={() => setShowCreateModal(true)} data-testid="button-create-tenant">
-          <Plus className="mr-2 h-4 w-4" />
-          Create Tenant
-        </Button>
-      </div>
+  // Pagination logic
+  const totalPages = Math.ceil(tenants.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedTenants = tenants.slice(startIndex, endIndex);
 
-      <div className="grid gap-4 md:grid-cols-3">
+  return (
+    <div className="flex h-screen overflow-hidden bg-slate-50">
+      <AdminSidebar />
+      
+      <main className="flex flex-col flex-1 overflow-hidden">
+        <Header 
+          title="Super Admin Dashboard"
+          description="Manage tenants and users across the platform"
+        />
+        
+        <div className="flex-1 overflow-y-auto p-6" data-testid="admin-dashboard">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="text-2xl font-bold" data-testid="page-title">Platform Overview</h2>
+            </div>
+            <Button onClick={() => setShowCreateModal(true)} data-testid="button-create-tenant">
+              <Plus className="mr-2 h-4 w-4" />
+              Create Tenant
+            </Button>
+          </div>
+
+          <div className="grid gap-6 md:grid-cols-3 mb-8">
         <Card data-testid="card-total-tenants">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Tenants</CardTitle>
@@ -177,7 +193,7 @@ export default function AdminDashboard() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {tenants.map((tenant: any) => (
+                {paginatedTenants.map((tenant: any) => (
                   <TableRow key={tenant.id} data-testid={`row-tenant-${tenant.id}`}>
                     <TableCell className="font-medium" data-testid={`text-tenant-name-${tenant.id}`}>
                       {tenant.name}
@@ -200,6 +216,38 @@ export default function AdminDashboard() {
                 ))}
               </TableBody>
             </Table>
+          )}
+          
+          {/* Pagination */}
+          {tenants.length > itemsPerPage && (
+            <div className="flex items-center justify-between px-2 py-4">
+              <div className="text-sm text-muted-foreground">
+                Showing {startIndex + 1} to {Math.min(endIndex, tenants.length)} of {tenants.length} tenants
+              </div>
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Previous
+                </Button>
+                <div className="text-sm font-medium">
+                  Page {currentPage} of {totalPages}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -363,6 +411,8 @@ export default function AdminDashboard() {
           </Form>
         </DialogContent>
       </Dialog>
+        </div>
+      </main>
     </div>
   );
 }

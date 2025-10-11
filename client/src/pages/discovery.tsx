@@ -17,6 +17,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { apiRequest } from "@/lib/queryClient";
 import { isUnauthorizedError } from "@/lib/authUtils";
+import Sidebar from "@/components/layout/sidebar";
+import Header from "@/components/layout/header";
 import { 
   Search, 
   Play, 
@@ -268,12 +270,17 @@ export default function Discovery() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Automated Discovery</h1>
-          <p className="text-gray-600">Discover and manage software assets automatically across your infrastructure</p>
-        </div>
+    <div className="flex h-screen overflow-hidden bg-slate-50">
+      <Sidebar />
+      
+      <main className="flex flex-col flex-1 overflow-hidden">
+        <Header 
+          title="Automated Discovery"
+          description="Discover and manage software assets automatically across your infrastructure"
+        />
+        
+        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex items-center justify-between mb-6">
         <div className="flex space-x-2">
           <Dialog open={showDocumentationModal} onOpenChange={setShowDocumentationModal}>
             <DialogTrigger asChild>
@@ -733,6 +740,8 @@ export default function Discovery() {
           )}
         </TabsContent>
       </Tabs>
+        </div>
+      </main>
     </div>
   );
 }

@@ -44,6 +44,7 @@ import {
 import { db } from "./db";
 import { eq, and, desc, count } from "drizzle-orm";
 import bcrypt from "bcrypt";
+import { createKeycloakUser } from "./keycloakAdmin";
 
 export interface IStorage {
   // User operations (required for Replit Auth)
@@ -213,12 +214,46 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createUser(userData: InsertUser): Promise<User> {
-    // Hash password if provided
+    let keycloakUserId: string | null = null;
+
+    // If using Keycloak, create user there first
+    if (process.env.AUTH_PROVIDER === "keycloak" && userData.username && userData.email && userData.password) {
+      try {
+        const plainPassword = userData.password; // Save before hashing
+        
+        keycloakUserId = await createKeycloakUser({
+          username: userData.username,
+          email: userData.email,
+          password: plainPassword,
+          firstName: userData.firstName || "",
+          lastName: userData.lastName || "",
+          emailVerified: true, // Auto-verify emails created by admin
+          enabled: true,
+        });
+
+        if (keycloakUserId) {
+          console.log(`✅ User created in Keycloak with ID: ${keycloakUserId}`);
+        } else {
+          console.warn("⚠️ Keycloak Admin API not available, creating user locally only");
+        }
+      } catch (error: any) {
+        console.error("❌ Failed to create user in Keycloak:", error.message);
+        // Re-throw to prevent user creation in AssetFlow if Keycloak fails
+        throw new Error(error.message || "Failed to create user in Keycloak");
+      }
+    }
+
+    // Hash password for local storage (if auth is local or as backup)
     if (userData.password) {
       userData.password = await bcrypt.hash(userData.password, 10);
     }
+
+    // Use Keycloak ID if available, otherwise let database generate UUID
+    const userToInsert = keycloakUserId 
+      ? { ...userData, id: keycloakUserId }
+      : userData;
     
-    const [user] = await db.insert(users).values(userData).returning();
+    const [user] = await db.insert(users).values(userToInsert).returning();
     return user;
   }
 

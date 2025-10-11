@@ -42,6 +42,8 @@ export default function Software() {
         <Header 
           title="Software Assets"
           description="Manage your software portfolio with version tracking and cost management"
+          showSearch={true}
+          showAddAsset={true}
         />
         
         <div className="flex-1 overflow-y-auto p-6 scrollbar-thin">

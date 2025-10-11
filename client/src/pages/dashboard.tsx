@@ -48,6 +48,7 @@ export default function Dashboard() {
         <Header 
           title="Dashboard"
           description="Overview of your software assets and environments"
+          showSearch={true}
         />
         
         <div className="flex-1 overflow-y-auto p-6 scrollbar-thin">

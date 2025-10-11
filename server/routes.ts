@@ -53,6 +53,15 @@ const isSuperAdmin = async (req: any, res: any, next: any) => {
 };
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Health check endpoint (no auth required)
+  app.get("/api/health", (req, res) => {
+    res.status(200).json({ 
+      status: "ok", 
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime()
+    });
+  });
+
   // Public config endpoint (no auth required)
   app.get("/api/config", (req, res) => {
     const authProvider = process.env.AUTH_PROVIDER || "local";
@@ -166,8 +175,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: fromZodError(error).message });
       }
-      console.error("Error creating user:", error);
-      res.status(500).json({ message: "Failed to create user" });
+      console.error("❌ Error creating user:", error);
+      // Mostrar mensagem de erro detalhada
+      const errorMessage = error instanceof Error ? error.message : "Failed to create user";
+      res.status(500).json({ message: errorMessage });
     }
   });
 
