@@ -30,6 +30,17 @@ jobs:
           push: true
           tags: ghcr.io/${{ github.repository }}:latest
 
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'ghcr.io/${{ github.repository }}:latest'
+          format: 'table'
+          exit-code: '0'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH,MEDIUM,LOW'
+
       - name: Trigger Portainer webhook
         uses: distributhor/workflow-webhook@v3
         with:
