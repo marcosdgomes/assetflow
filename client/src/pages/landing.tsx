@@ -132,7 +132,7 @@ export default function Landing() {
         <div className="max-w-7xl mx-auto px-6 py-8">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <img src="/logo.png" alt="RNC Atlas" className="w-6 h-6" />
+              <img src="/icon-mon-black.png" alt="RNC Atlas" className="w-6 h-6" />
               <span className="text-slate-600">© 2025 RNC Atlas. All rights reserved.</span>
             </div>
             <div className="text-slate-500 text-sm">
