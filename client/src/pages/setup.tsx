@@ -76,7 +76,7 @@ export default function Setup() {
     onSuccess: () => {
       setIsSetupComplete(true);
       toast({
-        title: "Welcome to AssetFlow!",
+        title: "Welcome to RNC Atlas!",
         description: "Your workspace has been created successfully.",
       });
       
@@ -142,10 +142,10 @@ export default function Setup() {
     <div className="min-h-screen flex items-center justify-center bg-slate-50">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <div className="w-16 h-16 bg-primary-600 rounded-lg flex items-center justify-center mx-auto mb-4">
-            <i className="fas fa-cube text-white text-2xl"></i>
+          <div className="w-16 h-16 flex items-center justify-center mx-auto mb-4">
+            <img src="/logo.png" alt="RNC Atlas" className="w-16 h-16" />
           </div>
-          <CardTitle className="text-2xl">Welcome to AssetFlow</CardTitle>
+          <CardTitle className="text-2xl">Welcome to RNC Atlas</CardTitle>
           <CardDescription>
             Let's set up your software asset management workspace
           </CardDescription>

@@ -66,12 +66,10 @@ export default function Sidebar() {
       {/* Logo */}
       <div className="p-6 border-b border-slate-200">
         <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center">
-            <i className="fas fa-cube text-white text-sm"></i>
-          </div>
+          <img src="/icon-mon-black.png" alt="RNC Atlas" className="w-8 h-8" />
           <div>
             <h1 className="text-xl font-semibold text-slate-900">
-              Assets Manager
+              RNC Atlas
             </h1>
             <p className="text-xs text-slate-500">
               {tenant?.name || "Loading..."}

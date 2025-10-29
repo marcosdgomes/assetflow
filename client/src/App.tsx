@@ -88,6 +88,7 @@ function Router() {
 
 function App() {
   const [ready, setReady] = useState(false);
+  const [checkingAutoLogin, setCheckingAutoLogin] = useState(false);
 
   useEffect(() => {
     async function init() {
@@ -95,21 +96,55 @@ function App() {
         const cfg = await fetchConfig();
         
         if (cfg.auth.provider === "keycloak") {
-          // Init Keycloak in background without blocking
-          initKeycloak().finally(() => setReady(true));
+          // Detecta callback do Keycloak na URL
+          const hasCallback = window.location.hash && 
+            (window.location.hash.includes("state=") || 
+             window.location.hash.includes("code=") ||
+             window.location.hash.includes("session_state="));
+
+          // Detecta se é rota protegida (não landing, não login)
+          const isProtectedRoute = !["/", "/login"].includes(window.location.pathname);
+
+          // DEVE esperar Keycloak se:
+          // - Tem callback (processando login), OU
+          // - É rota protegida (F5 em /software, etc.)
+          if (hasCallback || isProtectedRoute) {
+            console.log("🔄 Waiting for Keycloak init:", { hasCallback, isProtectedRoute });
+            await initKeycloak();
+            setReady(true);
+          } else {
+            // Landing ou Login públicas → renderiza e verifica auto-login
+            console.log("🚀 Public route, checking for auto-login in background");
+            setReady(true);
+            setCheckingAutoLogin(true);
+            
+            // Init em background para auto-login
+            const result = await initKeycloak();
+            
+            // Se detectou sessão, mantém loading (evita flash)
+            // Se não, libera landing
+            if (result?.authenticated) {
+              console.log("✅ Auto-login detected, will redirect to dashboard");
+              // Mantém checkingAutoLogin = true, Router vai redirecionar
+            } else {
+              console.log("ℹ️ No session found, showing landing");
+              setCheckingAutoLogin(false);
+            }
+          }
         } else {
           setReady(true);
         }
       } catch (error) {
         console.error("Failed to init:", error);
         setReady(true);
+        setCheckingAutoLogin(false);
       }
     }
     init();
   }, []);
 
-  // Only block while fetching config (very fast)
-  if (!ready) {
+  // Block durante config ou durante check de auto-login
+  if (!ready || checkingAutoLogin) {
     return (
       <div className="min-h-screen w-full flex items-center justify-center bg-slate-50">
         <div className="text-center">

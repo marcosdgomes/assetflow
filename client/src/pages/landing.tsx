@@ -12,10 +12,8 @@ export default function Landing() {
       <header className="px-6 py-4 border-b bg-white/80 backdrop-blur-sm">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center">
-              <i className="fas fa-cube text-white text-sm"></i>
-            </div>
-            <h1 className="text-xl font-semibold text-slate-900">AssetFlow</h1>
+            <img src="/icon-mon-black.png" alt="RNC Atlas" className="w-8 h-8" />
+            <h1 className="text-xl font-semibold text-slate-900">RNC Atlas</h1>
           </div>
           <Button onClick={handleLogin}>
             Sign In
@@ -121,7 +119,7 @@ export default function Landing() {
             Ready to take control of your software assets?
           </h2>
           <p className="text-lg text-slate-600 mb-8 max-w-2xl mx-auto">
-            Join organizations worldwide who trust AssetFlow to manage their software portfolio efficiently.
+            Join organizations worldwide who trust RNC Atlas to manage their software portfolio efficiently.
           </p>
           <Button onClick={handleLogin} size="lg" className="text-lg px-8 py-3">
             Start Your Free Trial
@@ -134,10 +132,8 @@ export default function Landing() {
         <div className="max-w-7xl mx-auto px-6 py-8">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <div className="w-6 h-6 bg-primary-600 rounded-lg flex items-center justify-center">
-                <i className="fas fa-cube text-white text-xs"></i>
-              </div>
-              <span className="text-slate-600">© 2025 AssetFlow. All rights reserved.</span>
+              <img src="/logo.png" alt="RNC Atlas" className="w-6 h-6" />
+              <span className="text-slate-600">© 2025 RNC Atlas. All rights reserved.</span>
             </div>
             <div className="text-slate-500 text-sm">
               Secure • Scalable • Simple

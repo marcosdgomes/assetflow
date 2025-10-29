@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Package } from "lucide-react";
 import { getConfig, keycloakLogin } from "@/lib/keycloak";
 
 export default function Login() {
@@ -76,11 +75,9 @@ export default function Login() {
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
           <div className="flex items-center justify-center mb-4">
-            <div className="w-12 h-12 bg-blue-500 rounded-lg flex items-center justify-center">
-              <Package className="w-8 h-8 text-white" />
-            </div>
+            <img src="/icon-mon-black.png" alt="RNC Atlas" className="w-12 h-12" />
           </div>
-          <CardTitle className="text-2xl text-center">AssetFlow</CardTitle>
+          <CardTitle className="text-2xl text-center">RNC Atlas</CardTitle>
           <CardDescription className="text-center">
             Sign in to your account
           </CardDescription>
