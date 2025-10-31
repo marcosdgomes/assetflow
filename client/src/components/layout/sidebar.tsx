@@ -72,7 +72,7 @@ export default function Sidebar() {
               RNC Atlas
             </h1>
             <p className="text-xs text-slate-500">
-              {tenant?.name || "Loading..."}
+              {(tenant as any)?.name || "Loading..."}
             </p>
           </div>
         </div>
@@ -100,23 +100,17 @@ export default function Sidebar() {
       </div>
 
       {/* User Menu */}
-      <div className="p-4 border-t border-slate-200">
+      <div className="p-4 border-t border-slate-200 sticky bottom-0 bg-white z-10">
         <div className="flex items-center space-x-3">
-          <img
-            src={
-              (user as any)?.profileImageUrl ||
-              `https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=40&h=40&fit=crop&crop=face`
-            }
-            alt="User avatar"
-            className="w-8 h-8 rounded-full object-cover"
-          />
+          <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center">
+            <i className="fas fa-user text-primary-600"></i>
+          </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-slate-900 truncate">
               {(user as any)?.firstName && (user as any)?.lastName
                 ? `${(user as any).firstName} ${(user as any).lastName}`
                 : (user as any)?.email || "User"}
             </p>
-            <p className="text-xs text-slate-500">Admin</p>
           </div>
           <button
             onClick={handleLogout}

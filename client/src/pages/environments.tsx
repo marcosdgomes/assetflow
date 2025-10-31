@@ -35,16 +35,16 @@ export default function Environments() {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-50">
+    <div className="flex min-h-screen bg-slate-50">
       <Sidebar />
       
-      <main className="flex-1 overflow-hidden">
+      <main className="flex flex-col flex-1">
         <Header 
           title="Environments"
           description="Manage infrastructure, VMs, and cloud environments"
         />
         
-        <div className="flex-1 overflow-y-auto p-6 scrollbar-thin">
+        <div className="p-6">
           <EnvironmentList />
         </div>
       </main>
