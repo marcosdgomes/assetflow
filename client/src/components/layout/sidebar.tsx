@@ -62,7 +62,7 @@ export default function Sidebar() {
   };
 
   return (
-    <nav className="w-64 bg-white border-r border-slate-200 flex flex-col">
+    <nav className="w-64 bg-white border-r border-slate-200 flex flex-col sticky top-0 h-screen">
       {/* Logo */}
       <div className="p-6 border-b border-slate-200">
         <div className="flex items-center space-x-3">
@@ -79,7 +79,7 @@ export default function Sidebar() {
       </div>
 
       {/* Navigation Menu */}
-      <div className="flex-1 px-4 py-6 space-y-2">
+      <div className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
         {navigationItems.map((item) => (
           <Link
             key={item.path}
