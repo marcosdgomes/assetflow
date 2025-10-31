@@ -1,7 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
-import { Building2, Users, Shield } from "lucide-react";
+import { Shield } from "lucide-react";
 import { getConfig, keycloakLogout } from "@/lib/keycloak";
 
 const navigationItems = [
@@ -12,13 +12,13 @@ const navigationItems = [
   },
   {
     name: "Tenants",
-    path: "/admin",
+    path: "/admin/tenants",
     icon: "fas fa-building",
   },
   {
     name: "Users",
     path: "/admin/users",
-    icon: Users,
+    icon: "fas fa-users",
   },
 ];
 
@@ -41,7 +41,7 @@ export default function AdminSidebar() {
       {/* Logo */}
       <div className="p-6 border-b border-slate-200">
         <div className="flex items-center space-x-3">
-          <img src="/logo.png" alt="RNC Atlas" className="w-8 h-8" />
+          <img src="/icon-mon-black.png" alt="RNC Atlas" className="w-8 h-8" />
           <div>
             <h1 className="text-xl font-semibold text-slate-900">
               RNC Atlas
@@ -55,27 +55,28 @@ export default function AdminSidebar() {
 
       {/* Navigation Menu */}
       <div className="flex-1 px-4 py-6 space-y-2">
-        {navigationItems.map((item) => (
-          <Link
-            key={item.path}
-            href={item.path}
-            className={cn(
-              "flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors",
-              location === item.path || location.startsWith('/admin')
-                ? "bg-primary-50 text-primary-700"
-                : "text-slate-600 hover:bg-slate-100",
-            )}
-          >
-            <i className={`${item.icon} w-5`}></i>
-            <span className={(location === item.path || location.startsWith('/admin')) ? "font-medium" : ""}>
-              {item.name}
-            </span>
-          </Link>
-        ))}
+        {navigationItems.map((item) => {
+          const isActive = item.path === "/admin"
+            ? location === "/admin"
+            : location === item.path || location.startsWith(`${item.path}/`);
+          return (
+            <Link
+              key={`${item.path}-${item.name}`}
+              href={item.path}
+              className={cn(
+                "flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors",
+                isActive ? "bg-primary-50 text-primary-700" : "text-slate-600 hover:bg-slate-100",
+              )}
+            >
+              <i className={`${item.icon} w-5`}></i>
+              <span className={isActive ? "font-medium" : ""}>{item.name}</span>
+            </Link>
+          );
+        })}
       </div>
 
       {/* User Menu */}
-      <div className="p-4 border-t border-slate-200">
+      <div className="p-4 border-t border-slate-200 sticky bottom-0 bg-white z-10">
         <div className="flex items-center space-x-3">
           <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center">
             <Shield className="w-4 h-4 text-primary-600" />

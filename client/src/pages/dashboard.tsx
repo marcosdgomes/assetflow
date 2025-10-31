@@ -41,17 +41,17 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-50">
+    <div className="flex min-h-screen bg-slate-50">
       <Sidebar />
       
-      <main className="flex-1 overflow-hidden">
+      <main className="flex flex-col flex-1">
         <Header 
           title="Dashboard"
           description="Overview of your software assets and environments"
           showSearch={true}
         />
         
-        <div className="flex-1 overflow-y-auto p-6 scrollbar-thin">
+        <div className="p-6">
           <KPICards />
           
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">

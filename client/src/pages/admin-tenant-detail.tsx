@@ -56,13 +56,13 @@ export default function AdminTenantDetail() {
   const { toast } = useToast();
 
   const { data: tenant, isLoading: tenantLoading } = useQuery<any>({
-    queryKey: ["/api/admin/tenants", tenantId],
+    queryKey: [`/api/admin/tenants/${tenantId}`],
     enabled: !!tenantId,
     retry: false,
   });
 
   const { data: tenantUsers = [], isLoading: usersLoading } = useQuery<any[]>({
-    queryKey: ["/api/admin/tenants", tenantId, "users"],
+    queryKey: [`/api/admin/tenants/${tenantId}/users`],
     enabled: !!tenantId,
     retry: false,
   });
@@ -97,7 +97,7 @@ export default function AdminTenantDetail() {
       await apiRequest("POST", `/api/admin/tenants/${tenantId}/users`, data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/tenants", tenantId, "users"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/admin/tenants/${tenantId}/users`] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
       setShowAddUserModal(false);
       addUserForm.reset();
@@ -137,7 +137,7 @@ export default function AdminTenantDetail() {
       return newUser;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/tenants", tenantId, "users"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/admin/tenants/${tenantId}/users`] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
       setShowAddUserModal(false);
       createUserForm.reset();
@@ -160,7 +160,7 @@ export default function AdminTenantDetail() {
       await apiRequest("DELETE", `/api/admin/tenants/${tenantId}/users/${userId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/tenants", tenantId, "users"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/admin/tenants/${tenantId}/users`] });
       setUserToRemove(null);
       toast({
         title: "Success",
@@ -181,7 +181,7 @@ export default function AdminTenantDetail() {
       await apiRequest("PATCH", `/api/admin/tenants/${tenantId}/users/${userId}/role`, { role });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/tenants", tenantId, "users"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/admin/tenants/${tenantId}/users`] });
       toast({
         title: "Success",
         description: "User role updated successfully",
@@ -333,10 +333,12 @@ export default function AdminTenantDetail() {
                 {tenantUsers.map((userTenant: any) => (
                   <TableRow key={userTenant.id} data-testid={`row-user-${userTenant.userId}`}>
                     <TableCell className="font-medium" data-testid={`text-user-name-${userTenant.userId}`}>
-                      {userTenant.user.firstName} {userTenant.user.lastName}
+                      {(userTenant.user?.firstName && userTenant.user?.lastName)
+                        ? `${userTenant.user.firstName} ${userTenant.user.lastName}`
+                        : (userTenant.user?.firstName ?? userTenant.user?.lastName ?? userTenant.user?.username ?? userTenant.user?.email ?? "—")}
                     </TableCell>
                     <TableCell data-testid={`text-user-email-${userTenant.userId}`}>
-                      {userTenant.user.email}
+                      {userTenant.user?.email ?? "—"}
                     </TableCell>
                     <TableCell>
                       <Select

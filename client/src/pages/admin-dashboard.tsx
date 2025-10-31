@@ -12,7 +12,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Building2, Users, Plus, Settings, ChevronLeft, ChevronRight } from "lucide-react";
+import { Building2, Users, Plus, Settings, ChevronLeft, ChevronRight, Activity } from "lucide-react";
 import { Link } from "wouter";
 import AdminSidebar from "@/components/layout/admin-sidebar";
 import Header from "@/components/layout/header";
@@ -49,6 +49,9 @@ export default function AdminDashboard() {
     queryKey: ["/api/admin/users"],
     retry: false,
   });
+
+  const { data: health } = useQuery<any>({ queryKey: ["/api/health"], retry: false });
+  const { data: config } = useQuery<any>({ queryKey: ["/api/config"], retry: false });
 
   const form = useForm<CreateTenantFormData>({
     resolver: zodResolver(createTenantSchema),
@@ -110,6 +113,20 @@ export default function AdminDashboard() {
   const endIndex = startIndex + itemsPerPage;
   const paginatedTenants = tenants.slice(startIndex, endIndex);
 
+  const now = Date.now();
+  const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+  const newTenants7d = tenants.filter((t: any) => {
+    const created = new Date(t.createdAt as string).getTime();
+    return !Number.isNaN(created) && now - created <= sevenDaysMs;
+  }).length;
+  const tenantsWithFewUsers = tenants.filter((t: any) => (t.userCount || 0) <= 1).length;
+  const recentTenants = [...tenants]
+    .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, 5);
+  const recentUsers = [...users]
+    .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, 5);
+
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50">
       <AdminSidebar />
@@ -131,7 +148,7 @@ export default function AdminDashboard() {
             </Button>
           </div>
 
-          <div className="grid gap-6 md:grid-cols-3 mb-8">
+          <div className="grid gap-6 md:grid-cols-4 mb-8">
         <Card data-testid="card-total-tenants">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Tenants</CardTitle>
@@ -167,90 +184,102 @@ export default function AdminDashboard() {
             </div>
           </CardContent>
         </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">New Tenants (7d)</CardTitle>
+            <Activity className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{newTenants7d}</div>
+          </CardContent>
+        </Card>
       </div>
 
-      <Card data-testid="card-tenants-table">
-        <CardHeader>
-          <CardTitle>Tenants</CardTitle>
-          <CardDescription>View and manage all tenants in the system</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {tenantsLoading ? (
-            <div className="text-center py-8 text-muted-foreground">Loading tenants...</div>
-          ) : tenants.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              No tenants found. Create your first tenant to get started.
+      <div className="grid gap-6 md:grid-cols-3 mb-8">
+        <Card>
+          <CardHeader>
+            <CardTitle>Platform Status</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-sm text-slate-600 space-y-1">
+              <div>API: <span className="font-medium">{health?.status || "unknown"}</span></div>
+              <div>Uptime: <span className="font-medium">{health?.uptime ? Math.floor(health.uptime) + "s" : "—"}</span></div>
+              <div>Auth: <span className="font-medium">{config?.auth?.provider || "local"}</span></div>
             </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Slug</TableHead>
-                  <TableHead>Users</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {paginatedTenants.map((tenant: any) => (
-                  <TableRow key={tenant.id} data-testid={`row-tenant-${tenant.id}`}>
-                    <TableCell className="font-medium" data-testid={`text-tenant-name-${tenant.id}`}>
-                      {tenant.name}
-                    </TableCell>
-                    <TableCell data-testid={`text-tenant-slug-${tenant.id}`}>{tenant.slug}</TableCell>
-                    <TableCell data-testid={`text-tenant-users-${tenant.id}`}>
-                      {tenant.userCount || 0}
-                    </TableCell>
-                    <TableCell data-testid={`text-tenant-created-${tenant.id}`}>
-                      {new Date(tenant.createdAt).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Link href={`/admin/tenants/${tenant.id}`}>
-                        <Button variant="outline" size="sm" data-testid={`button-manage-${tenant.id}`}>
-                          Manage
-                        </Button>
-                      </Link>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Tenants With 1 User</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{tenantsWithFewUsers}</div>
+            <div className="text-sm text-slate-600 mt-2">Includes newly created tenants</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Users by Role</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {usersLoading ? (
+              <div className="text-sm text-slate-600">Loading...</div>
+            ) : (
+              <div className="text-sm text-slate-700 space-y-1">
+                <div className="flex justify-between"><span>Super Admin</span><span className="font-medium">{users.filter((u: any) => u.role === "super-admin").length}</span></div>
+                <div className="flex justify-between"><span>User</span><span className="font-medium">{users.filter((u: any) => u.role === "user").length}</span></div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
           
-          {/* Pagination */}
-          {tenants.length > itemsPerPage && (
-            <div className="flex items-center justify-between px-2 py-4">
-              <div className="text-sm text-muted-foreground">
-                Showing {startIndex + 1} to {Math.min(endIndex, tenants.length)} of {tenants.length} tenants
+
+      <div className="grid gap-6 md:grid-cols-2 mt-8">
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent Tenants</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {recentTenants.length === 0 ? (
+              <div className="text-sm text-slate-600">No tenants</div>
+            ) : (
+              <div className="space-y-3">
+                {recentTenants.map((t: any) => (
+                  <div key={t.id} className="flex items-center justify-between text-sm">
+                    <div className="font-medium">{t.name}</div>
+                    <div className="text-slate-500">{new Date(t.createdAt).toLocaleDateString()}</div>
+                  </div>
+                ))}
               </div>
-              <div className="flex items-center space-x-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                  Previous
-                </Button>
-                <div className="text-sm font-medium">
-                  Page {currentPage} of {totalPages}
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                  disabled={currentPage === totalPages}
-                >
-                  Next
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent Users</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {recentUsers.length === 0 ? (
+              <div className="text-sm text-slate-600">No users</div>
+            ) : (
+              <div className="space-y-3">
+                {recentUsers.map((u: any) => (
+                  <div key={u.id} className="flex items-center justify-between text-sm">
+                    <div className="font-medium">{u.firstName && u.lastName ? `${u.firstName} ${u.lastName}` : (u.email || u.username)}</div>
+                    <div className="text-slate-500">{new Date(u.createdAt).toLocaleDateString()}</div>
+                  </div>
+                ))}
               </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
         <DialogContent className="sm:max-w-[600px]" data-testid="dialog-create-tenant">

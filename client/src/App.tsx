@@ -20,16 +20,20 @@ import Costs from "@/pages/costs";
 import AdminDashboard from "@/pages/admin-dashboard";
 import AdminTenantDetail from "@/pages/admin-tenant-detail";
 import AdminUsers from "@/pages/admin-users";
+import AdminTenants from "@/pages/admin-tenants";
 
 function Router() {
   const { user, isAuthenticated, isLoading } = useAuth();
   const token = getKeycloakToken();
   const provider = getConfig()?.auth.provider || "local";
   
-  // Check if authenticated user has a tenant
+  // Check if user is super admin (check first, before tenant query)
+  const isSuperAdmin = (user as any)?.role === "super-admin";
+  
+  // Check if authenticated user has a tenant (skip for super-admin since they don't have tenants)
   const { data: tenant, isLoading: tenantLoading } = useQuery({
     queryKey: ["/api/tenant"],
-    enabled: !!user,
+    enabled: !!user && !isSuperAdmin,
     retry: false,
   });
 
@@ -37,7 +41,7 @@ function Router() {
   // This prevents showing Landing briefly before user data arrives after F5
   const waitingForUserWithToken = provider === "keycloak" && !!token && !user;
 
-  if (isLoading || (isAuthenticated && tenantLoading) || waitingForUserWithToken) {
+  if (isLoading || (isAuthenticated && !isSuperAdmin && tenantLoading) || waitingForUserWithToken) {
     return (
       <div className="min-h-screen w-full flex items-center justify-center bg-slate-50">
         <div className="text-center">
@@ -47,9 +51,6 @@ function Router() {
       </div>
     );
   }
-
-  // Check if user is super admin
-  const isSuperAdmin = (user as any)?.role === "super-admin";
 
   return (
     <Switch>
@@ -64,6 +65,7 @@ function Router() {
         <>
           <Route path="/" component={AdminDashboard} />
           <Route path="/admin" component={AdminDashboard} />
+          <Route path="/admin/tenants" component={AdminTenants} />
           <Route path="/admin/users" component={AdminUsers} />
           <Route path="/admin/tenants/:id" component={AdminTenantDetail} />
         </>

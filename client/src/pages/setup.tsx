@@ -143,7 +143,13 @@ export default function Setup() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <div className="w-16 h-16 flex items-center justify-center mx-auto mb-4">
-            <img src="/logo.png" alt="RNC Atlas" className="w-16 h-16" />
+            <img
+              src="/icon-mon-black.png"
+              alt="RNC Atlas"
+              className="w-12 h-12 object-contain"
+              loading="eager"
+              decoding="async"
+            />
           </div>
           <CardTitle className="text-2xl">Welcome to RNC Atlas</CardTitle>
           <CardDescription>
